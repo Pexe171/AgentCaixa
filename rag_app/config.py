@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from pydantic import BaseSettings, Field, validator
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
 
 
 class AppSettings(BaseSettings):
@@ -28,13 +29,13 @@ class AppSettings(BaseSettings):
     OPENAI_MODEL: str | None = None
     OPENAI_API_KEY: str | None = Field(default=None, repr=False)
 
-    @validator("HYBRID_ALPHA")
+    @field_validator("HYBRID_ALPHA")
     def _validate_hybrid_alpha(cls, value: float) -> float:
         if not 0.0 <= value <= 1.0:
             raise ValueError("HYBRID_ALPHA must be between 0 and 1.")
         return value
 
-    @validator("STRICT_MIN_SCORE")
+    @field_validator("STRICT_MIN_SCORE")
     def _validate_min_score(cls, value: float) -> float:
         if not 0.0 <= value <= 1.0:
             raise ValueError("STRICT_MIN_SCORE must be between 0 and 1.")
