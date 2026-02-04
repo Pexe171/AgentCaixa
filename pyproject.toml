@@ -16,6 +16,7 @@ dependencies = [
   "pydantic",
   "typer",
   "python-dotenv",
+  "python-docx",
 ]
 
 [project.optional-dependencies]
