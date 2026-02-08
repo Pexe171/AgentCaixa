@@ -219,6 +219,36 @@ def test_agent_guardrail_blocks_behavior_shift_with_session_context() -> None:
     assert any(token in blocked.answer.lower() for token in ("comportamental", "privacidade"))
 
 
+
+
+def test_agent_service_permite_override_para_ollama_por_requisicao(monkeypatch) -> None:
+    from rag_app.agent import service as service_module
+
+    settings = AppSettings(LLM_PROVIDER="mock", OLLAMA_MODEL=None)
+    service = AgentService(settings=settings)
+
+    def fake_generate(self, system_prompt: str, user_prompt: str, tools=None, tool_executor=None):
+        del self, system_prompt, user_prompt, tools, tool_executor
+        return service_module.LLMOutput(
+            text="Resposta via Ollama override",
+            provider="ollama",
+            model="llama3.1",
+        )
+
+    monkeypatch.setattr(service_module.OllamaLLMGateway, "generate", fake_generate)
+
+    response = service.chat(
+        AgentChatRequest(
+            user_message="Use o olami para responder",
+            llm_provider="olami",
+            ollama_model="llama3.1",
+            ollama_base_url="http://localhost:11434",
+        )
+    )
+
+    assert response.diagnostics.provider_used == "ollama"
+    assert response.diagnostics.fallback_used is False
+
 def test_agent_service_retorna_cache_de_resposta_em_pergunta_repetida() -> None:
     settings = AppSettings(RESPONSE_CACHE_BACKEND="memory")
     service = AgentService(settings=settings)

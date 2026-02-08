@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ContextSnippet(BaseModel):
@@ -27,6 +27,33 @@ class AgentChatRequest(BaseModel):
     tone: Literal["profissional", "amigavel", "tecnico", "didatico"] = "profissional"
     reasoning_depth: Literal["rapido", "padrao", "profundo"] = "padrao"
     require_citations: bool = True
+    llm_provider: Literal["mock", "openai", "ollama"] | None = Field(
+        default=None,
+        description=(
+            "Override opcional do provedor de LLM por requisição. "
+            "Aceita mock, openai e ollama."
+        ),
+    )
+    ollama_model: str | None = Field(
+        default=None,
+        description="Modelo Ollama opcional para override por requisição.",
+    )
+    ollama_base_url: str | None = Field(
+        default=None,
+        description="Base URL do Ollama opcional para override por requisição.",
+    )
+
+    @field_validator("llm_provider", mode="before")
+    def _normalize_llm_provider(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        normalized = str(value).strip().lower()
+        aliases = {
+            "olami": "ollama",
+            "ollamma": "ollama",
+            "ollhama": "ollama",
+        }
+        return aliases.get(normalized, normalized)
 
 
 class AgentDiagnostics(BaseModel):

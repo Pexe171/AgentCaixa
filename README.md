@@ -243,6 +243,23 @@ curl -X POST http://localhost:8000/v1/agent/chat \
   }'
 ```
 
+### 8.4 Override de provedor por requisição (ex.: Ollama/"Olami")
+
+Quando você quiser forçar o uso do Ollama em uma chamada específica, envie `llm_provider` no body. O backend aceita alias comum (`olami`) e normaliza para `ollama`.
+
+```bash
+curl -X POST http://localhost:8000/v1/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_message": "Me responda usando o modelo local.",
+    "llm_provider": "olami",
+    "ollama_model": "llama3.1",
+    "ollama_base_url": "http://localhost:11434"
+  }'
+```
+
+> Isso evita cair em resposta mock quando o provider padrão global não está em `ollama`.
+
 ---
 
 ## 9) Como funciona a parte vetorial na prática
