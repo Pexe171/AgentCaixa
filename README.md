@@ -13,8 +13,9 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
   - `POST /v1/agent/chat`
   - `POST /v1/agent/scan`
 - Pipeline de chat com:
-  - recuperação de contexto local inicial;
-  - montagem de prompt com tom/profundidade;
+  - recuperação híbrida (lexical + vetorial) com reranking real dos 20 melhores candidatos e seleção final dos 5 mais relevantes;
+  - etapa explícita de planejamento (`Plano de Execução`) antes da resposta final;
+  - montagem de prompt com tom/profundidade e memória de sessão;
   - geração por `mock`, `openai` ou `ollama`;
   - diagnósticos (latência, modelo, fallback).
 - Scanner multi-linguagem de pasta para identificar problemas comuns:
@@ -39,13 +40,15 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
 ### 1) Fluxo de chat (`/v1/agent/chat`)
 
 1. Recebe `AgentChatRequest`.
-2. Recupera snippets de contexto.
-3. Monta prompts sistêmico + usuário.
-4. Resolve provedor:
+2. Recupera até 20 snippets lexicais + 20 vetoriais.
+3. Deduplica resultados e aplica reranking para escolher os 5 melhores contextos.
+4. Gera um Plano de Execução com o LLM antes da resposta final.
+5. Monta prompts sistêmico + usuário com plano + contexto final.
+6. Resolve provedor:
    - `openai` quando chave/modelo estiverem configurados;
    - `ollama` quando modelo local estiver configurado;
    - fallback para `mock` nos demais casos.
-5. Retorna resposta com citações e diagnósticos.
+7. Retorna resposta com citações e diagnósticos.
 
 ### 2) Fluxo de análise de pasta (`/v1/agent/scan`)
 

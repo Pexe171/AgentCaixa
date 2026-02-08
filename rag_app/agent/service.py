@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import json
 from datetime import datetime, timezone
 from typing import Protocol
 from uuid import uuid4
@@ -33,6 +34,20 @@ class LLMGateway(Protocol):
         """Gera resposta textual a partir de prompts."""
 
 
+def _build_planning_prompt(user_message: str, memory_blocks: list[str]) -> str:
+    memory_text = "\n".join(memory_blocks) if memory_blocks else "Sem histórico prévio"
+    return (
+        "Antes da resposta final, elabore um Plano de Execução curto para resolver o pedido.\n"
+        "Formato obrigatório:\n"
+        "1) Objetivo\n"
+        "2) Contextos necessários\n"
+        "3) Ferramentas/ações\n"
+        "4) Critérios de qualidade\n\n"
+        f"Pergunta do usuário:\n{user_message}\n\n"
+        f"Memória da sessão:\n{memory_text}\n"
+    )
+
+
 def _build_system_prompt(tone: str, depth: str, require_citations: bool) -> str:
     citation_rule = (
         "Inclua citações explícitas às fontes de contexto usadas."
@@ -50,6 +65,7 @@ def _build_system_prompt(tone: str, depth: str, require_citations: bool) -> str:
 
 def _build_user_prompt(
     user_message: str,
+    execution_plan: str,
     context_blocks: list[str],
     memory_blocks: list[str],
 ) -> str:
@@ -57,10 +73,84 @@ def _build_user_prompt(
     memory_text = "\n".join(memory_blocks) if memory_blocks else "Sem histórico prévio"
     return (
         f"Pergunta do usuário:\n{user_message}\n\n"
+        f"Plano de execução aprovado:\n{execution_plan}\n\n"
         f"Memória da sessão:\n{memory_text}\n\n"
         f"Contexto recuperado:\n{context_text}\n\n"
         "Responda em português do Brasil com objetividade e completude."
     )
+
+
+def _deduplicate_snippets(snippets: list[ContextSnippet]) -> list[ContextSnippet]:
+    deduplicated: dict[tuple[str, str], ContextSnippet] = {}
+    for snippet in snippets:
+        key = (snippet.source, snippet.content)
+        existing = deduplicated.get(key)
+        if existing is None or snippet.score > existing.score:
+            deduplicated[key] = snippet
+    return list(deduplicated.values())
+
+
+def _rank_candidates(query: str, snippets: list[ContextSnippet]) -> list[ContextSnippet]:
+    query_tokens = {token.strip(".,:;!?()[]{}\"'").lower() for token in query.split()}
+    if not query_tokens:
+        return snippets
+
+    def rerank_score(snippet: ContextSnippet) -> float:
+        snippet_tokens = {
+            token.strip(".,:;!?()[]{}\"'").lower()
+            for token in snippet.content.split()
+            if token
+        }
+        overlap = len(query_tokens.intersection(snippet_tokens))
+        lexical_boost = overlap / max(1, len(query_tokens))
+        return (snippet.score * 0.7) + (lexical_boost * 0.3)
+
+    return sorted(snippets, key=rerank_score, reverse=True)
+
+
+def _build_rerank_prompt(query: str, snippets: list[ContextSnippet]) -> str:
+    serialized = [
+        {
+            "index": index,
+            "source": snippet.source,
+            "score": round(snippet.score, 4),
+            "content": snippet.content,
+        }
+        for index, snippet in enumerate(snippets)
+    ]
+    return (
+        "Reordene os trechos abaixo para responder a pergunta com máxima precisão. "
+        "Retorne apenas JSON no formato {\"selected_indexes\":[i1,i2,...]} com até 5 índices únicos.\n"
+        f"Pergunta: {query}\n"
+        f"Trechos: {json.dumps(serialized, ensure_ascii=False)}"
+    )
+
+
+def _extract_selected_indexes(raw_text: str, max_index: int) -> list[int]:
+    start = raw_text.find("{")
+    end = raw_text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return []
+
+    try:
+        payload = json.loads(raw_text[start : end + 1])
+    except json.JSONDecodeError:
+        return []
+
+    selected_indexes = payload.get("selected_indexes")
+    if not isinstance(selected_indexes, list):
+        return []
+
+    valid_indexes: list[int] = []
+    for value in selected_indexes:
+        if not isinstance(value, int):
+            continue
+        if value < 0 or value >= max_index:
+            continue
+        if value in valid_indexes:
+            continue
+        valid_indexes.append(value)
+    return valid_indexes[:5]
 
 
 def _resolve_gateway(settings: AppSettings) -> LLMGateway:
@@ -106,6 +196,55 @@ class AgentService:
         approx_tokens = max(1, (len(prompt) + len(answer)) // 4)
         return round((approx_tokens / 1000) * self._settings.COST_PER_1K_TOKENS_USD, 6)
 
+    def _build_execution_plan(
+        self,
+        user_message: str,
+        memory_blocks: list[str],
+        system_prompt: str,
+    ) -> str:
+        planning_prompt = _build_planning_prompt(
+            user_message=user_message,
+            memory_blocks=memory_blocks,
+        )
+        plan_output = self._gateway.generate(
+            system_prompt=(
+                f"{system_prompt} "
+                "Você está na etapa de planejamento e não deve escrever a resposta final."
+            ),
+            user_prompt=planning_prompt,
+        )
+        return plan_output.text
+
+    def _rerank_snippets(
+        self,
+        query: str,
+        snippets: list[ContextSnippet],
+    ) -> list[ContextSnippet]:
+        if not snippets:
+            return []
+
+        ranked_candidates = _rank_candidates(query=query, snippets=snippets)[:20]
+        rerank_prompt = _build_rerank_prompt(query=query, snippets=ranked_candidates)
+
+        try:
+            rerank_output = self._gateway.generate(
+                system_prompt=(
+                    "Você é um reranker especializado em recuperação híbrida. "
+                    "Responda estritamente em JSON válido."
+                ),
+                user_prompt=rerank_prompt,
+            )
+            selected_indexes = _extract_selected_indexes(
+                raw_text=rerank_output.text,
+                max_index=len(ranked_candidates),
+            )
+            if selected_indexes:
+                return [ranked_candidates[index] for index in selected_indexes]
+        except Exception:
+            pass
+
+        return ranked_candidates[:5]
+
     def chat(self, request: AgentChatRequest) -> AgentChatResponse:
         start = time.perf_counter()
         trace_id = str(uuid4())
@@ -133,15 +272,18 @@ class AgentService:
                 timestamp=datetime.now(timezone.utc),
             )
 
-        snippets = retrieve_context(
+        lexical_snippets = retrieve_context(
             query=request.user_message,
-            top_k=self._settings.RETRIEVE_TOP_K_DEFAULT,
+            top_k=20,
         )
         vector_snippets = self._vector_retriever.retrieve(
             query=request.user_message,
-            top_k=self._settings.RETRIEVE_TOP_K_DEFAULT,
+            top_k=20,
         )
-        snippets = snippets + vector_snippets
+        snippets = self._rerank_snippets(
+            query=request.user_message,
+            snippets=_deduplicate_snippets(lexical_snippets + vector_snippets),
+        )
 
         context_blocks = [
             "- Fonte: "
@@ -159,8 +301,14 @@ class AgentService:
             depth=request.reasoning_depth,
             require_citations=request.require_citations,
         )
+        execution_plan = self._build_execution_plan(
+            user_message=request.user_message,
+            memory_blocks=memory_blocks,
+            system_prompt=system_prompt,
+        )
         user_prompt = _build_user_prompt(
             user_message=request.user_message,
+            execution_plan=execution_plan,
             context_blocks=context_blocks,
             memory_blocks=memory_blocks,
         )
