@@ -87,3 +87,33 @@ class AgentScanResponse(BaseModel):
     issues: list[ScanIssue]
     linter_findings: list[str] = Field(default_factory=list)
     summary: str
+
+
+class ImageDataAnalysisRequest(BaseModel):
+    """Entrada para análise vetorial de imagem local."""
+
+    image_path: str = Field(min_length=1, description="Caminho local da imagem")
+    reference_image_path: str | None = Field(
+        default=None,
+        description=(
+            "Imagem de referência opcional para cálculo de similaridade vetorial"
+        ),
+    )
+
+
+class ImageDataAnalysisResponse(BaseModel):
+    """Saída consolidada da análise vetorial de imagem."""
+
+    image_path: str
+    width: int
+    height: int
+    channels: int
+    brightness_mean: float
+    brightness_std: float
+    edge_density: float
+    entropy: float
+    top_palette: list[str]
+    vector_dimensions: int
+    vector_preview: list[float]
+    reference_image_path: str | None = None
+    similarity_score: float | None = None

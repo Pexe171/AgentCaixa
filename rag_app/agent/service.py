@@ -18,6 +18,11 @@ from rag_app.agent.llm_gateway import (
     OpenAILLMGateway,
     ToolExecutor,
 )
+from rag_app.agent.image_vector_analysis import (
+    ImageAnalysisError,
+    compare_images,
+    extract_image_vector,
+)
 from rag_app.agent.orchestration import route_to_specialist, specialist_instruction
 from rag_app.agent.scanner import scan_folder
 from rag_app.agent.schemas import (
@@ -27,6 +32,8 @@ from rag_app.agent.schemas import (
     AgentScanRequest,
     AgentScanResponse,
     ContextSnippet,
+    ImageDataAnalysisRequest,
+    ImageDataAnalysisResponse,
 )
 from rag_app.agent.semantic_memory import (
     SQLiteSemanticMemoryStore,
@@ -547,6 +554,58 @@ class AgentService:
             "diagnostics": response.diagnostics.model_dump(),
             "timestamp": response.timestamp.isoformat(),
         }
+
+
+    def analyze_image_data(
+        self,
+        request: ImageDataAnalysisRequest,
+    ) -> ImageDataAnalysisResponse:
+        """Executa análise vetorial nativa de imagem sem API externa."""
+
+        try:
+            if request.reference_image_path:
+                reference, target, similarity = compare_images(
+                    reference_image_path=request.reference_image_path,
+                    target_image_path=request.image_path,
+                )
+                return ImageDataAnalysisResponse(
+                    image_path=target.image_path,
+                    width=target.width,
+                    height=target.height,
+                    channels=target.channels,
+                    brightness_mean=target.brightness_mean,
+                    brightness_std=target.brightness_std,
+                    edge_density=target.edge_density,
+                    entropy=target.entropy,
+                    top_palette=[
+                        f"rgb({red},{green},{blue})"
+                        for red, green, blue in target.top_palette
+                    ],
+                    vector_dimensions=len(target.vector),
+                    vector_preview=[round(value, 6) for value in target.vector[:12]],
+                    reference_image_path=reference.image_path,
+                    similarity_score=similarity,
+                )
+
+            result = extract_image_vector(request.image_path)
+            return ImageDataAnalysisResponse(
+                image_path=result.image_path,
+                width=result.width,
+                height=result.height,
+                channels=result.channels,
+                brightness_mean=result.brightness_mean,
+                brightness_std=result.brightness_std,
+                edge_density=result.edge_density,
+                entropy=result.entropy,
+                top_palette=[
+                    f"rgb({red},{green},{blue})"
+                    for red, green, blue in result.top_palette
+                ],
+                vector_dimensions=len(result.vector),
+                vector_preview=[round(value, 6) for value in result.vector[:12]],
+            )
+        except ImageAnalysisError as exc:
+            raise ValueError(str(exc)) from exc
 
     def scan_codebase(self, request: AgentScanRequest) -> AgentScanResponse:
         """Executa varredura completa em pasta para suporte a debug."""

@@ -16,6 +16,8 @@ from rag_app.agent.schemas import (
     AgentChatResponse,
     AgentScanRequest,
     AgentScanResponse,
+    ImageDataAnalysisRequest,
+    ImageDataAnalysisResponse,
 )
 from rag_app.agent.service import AgentService
 from rag_app.config import load_settings
@@ -177,6 +179,15 @@ def agent_chat_stream(payload: AgentChatRequest) -> StreamingResponse:
             yield f"event: {event_name}\ndata: {serialized}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/v1/agent/image/analyze", response_model=ImageDataAnalysisResponse)
+def agent_image_analyze(payload: ImageDataAnalysisRequest) -> ImageDataAnalysisResponse:
+    """Executa análise de dados de imagem com vetores locais (sem API externa)."""
+    try:
+        return agent_service.analyze_image_data(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/v1/agent/scan", response_model=AgentScanResponse)
