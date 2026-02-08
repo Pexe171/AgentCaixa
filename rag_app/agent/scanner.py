@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
 from rag_app.agent.schemas import AgentScanResponse, ScanIssue
@@ -134,10 +136,48 @@ def _evaluate_line(file_path: Path, line: str, line_number: int) -> list[ScanIss
     return issues
 
 
+def _run_optional_linters(root: Path, languages: set[str]) -> list[str]:
+    linter_commands: dict[str, list[str]] = {
+        "python": ["flake8", str(root)],
+        "javascript": ["eslint", str(root)],
+        "typescript": ["eslint", str(root)],
+        "go": ["golangci-lint", "run", str(root)],
+    }
+
+    findings: list[str] = []
+    for language in sorted(languages):
+        command = linter_commands.get(language)
+        if not command:
+            continue
+        if not shutil.which(command[0]):
+            findings.append(
+                f"Linter para {language} não disponível no ambiente ({command[0]})."
+            )
+            continue
+
+        completed = subprocess.run(
+            command,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode == 0:
+            findings.append(f"{command[0]} executado sem erros para {language}.")
+            continue
+
+        output = (completed.stdout or completed.stderr).strip().splitlines()
+        sample = output[0] if output else "linter retornou erro sem detalhes"
+        findings.append(f"{command[0]} reportou achados em {language}: {sample}")
+
+    return findings
+
+
 def scan_folder(
     folder_path: str,
     include_hidden: bool = False,
     max_files: int = 400,
+    run_linters: bool = False,
 ) -> AgentScanResponse:
     """Executa varredura da pasta procurando problemas comuns."""
 
@@ -169,11 +209,16 @@ def scan_folder(
             )
             issues.extend(line_issues)
 
+    linter_findings = (
+        _run_optional_linters(root=root, languages=languages) if run_linters else []
+    )
+
     summary = (
         "Varredura concluída com sucesso. "
         f"Arquivos analisados: {len(files)}. "
         f"Linguagens detectadas: {', '.join(sorted(languages)) or 'nenhuma'}. "
-        f"Achados totais: {len(issues)}."
+        f"Achados totais: {len(issues)}. "
+        f"Linters executados: {'sim' if run_linters else 'não'}."
     )
 
     return AgentScanResponse(
@@ -181,5 +226,6 @@ def scan_folder(
         files_scanned=len(files),
         languages_detected=sorted(languages),
         issues=issues,
+        linter_findings=linter_findings,
         summary=summary,
     )

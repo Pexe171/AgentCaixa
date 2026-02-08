@@ -37,6 +37,8 @@ class AgentDiagnostics(BaseModel):
     latency_ms: int
     retrieved_context_count: int
     fallback_used: bool
+    trace_id: str
+    estimated_cost_usd: float
 
 
 class AgentChatResponse(BaseModel):
@@ -71,6 +73,7 @@ class AgentScanRequest(BaseModel):
     folder_path: str = Field(min_length=1)
     include_hidden: bool = False
     max_files: int = Field(default=400, ge=1, le=5000)
+    run_linters: bool = False
 
 
 class AgentScanResponse(BaseModel):
@@ -80,4 +83,5 @@ class AgentScanResponse(BaseModel):
     files_scanned: int
     languages_detected: list[str]
     issues: list[ScanIssue]
+    linter_findings: list[str] = Field(default_factory=list)
     summary: str

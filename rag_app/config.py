@@ -33,6 +33,10 @@ class AppSettings(BaseSettings):
     OLLAMA_MODEL: str | None = None
     OLLAMA_TIMEOUT_SECONDS: float = 30.0
     AGENT_NAME: str = "HAG-PTBR"
+    VECTOR_PROVIDER: Literal["none", "pgvector", "qdrant", "weaviate"] = "none"
+    ENABLE_LINTER_SCAN: bool = False
+    AUDIT_LOG_PATH: str = "data/audit/agent_audit.log"
+    COST_PER_1K_TOKENS_USD: float = 0.002
 
     @field_validator("HYBRID_ALPHA")
     def _validate_hybrid_alpha(cls, value: float) -> float:
@@ -44,6 +48,12 @@ class AppSettings(BaseSettings):
     def _validate_min_score(cls, value: float) -> float:
         if not 0.0 <= value <= 1.0:
             raise ValueError("STRICT_MIN_SCORE must be between 0 and 1.")
+        return value
+
+    @field_validator("COST_PER_1K_TOKENS_USD")
+    def _validate_cost(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("COST_PER_1K_TOKENS_USD must be greater or equal to 0.")
         return value
 
     @field_validator("OPENAI_TIMEOUT_SECONDS", "OLLAMA_TIMEOUT_SECONDS")
