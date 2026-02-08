@@ -39,6 +39,13 @@ frontend = [
 
 observability = [
   "langfuse",
+  "langsmith",
+]
+
+parser = [
+  "docling",
+  "unstructured[docx]",
+  "pytesseract",
 ]
 
 [tool.ruff]

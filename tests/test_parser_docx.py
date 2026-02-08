@@ -63,7 +63,34 @@ def test_parse_docx_to_blocks_includes_ocr_image_blocks(
 
     blocks = parse_docx_to_blocks(docx_path)
 
-    assert [block.type for block in blocks] == ["paragraph", "image", "table", "paragraph"]
+    assert [block.type for block in blocks] == [
+        "paragraph",
+        "image",
+        "table",
+        "paragraph",
+    ]
     assert [block.order for block in blocks] == [1, 2, 3, 4]
     assert image_calls["count"] == 1
     assert "comprovativo" in blocks[1].text
+
+
+def test_parse_docx_to_blocks_prefers_structured_table_extractors(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    docx_path = tmp_path / "sample_structured.docx"
+    _create_sample_docx(docx_path)
+
+    monkeypatch.setattr(
+        "rag_app.ingest.parser_docx._extract_tables_with_docling",
+        lambda _: ["Tabela estruturada: renda | parcela"],
+    )
+    monkeypatch.setattr(
+        "rag_app.ingest.parser_docx._extract_tables_with_unstructured",
+        lambda _: ["fallback"],
+    )
+
+    blocks = parse_docx_to_blocks(docx_path)
+
+    assert blocks[1].type == "table"
+    assert blocks[1].text == "Tabela estruturada: renda | parcela"
