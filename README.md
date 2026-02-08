@@ -292,6 +292,8 @@ Se não houver SDK/chave/disponibilidade, o serviço faz fallback local.
 
 Quando `RESPONSE_CACHE_BACKEND` está ativo, perguntas repetidas retornam do cache.
 
+A chave de cache considera também o provedor/modelo configurado (ex.: `mock` vs `ollama`), evitando reaproveitar resposta de um backend em outro.
+
 Efeito esperado:
 
 - menor latência;

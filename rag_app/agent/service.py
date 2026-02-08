@@ -472,12 +472,33 @@ class AgentService:
             )
             span.update(output=rewritten_query)
 
+        requested_provider = (
+            (request.llm_provider or self._settings.LLM_PROVIDER).strip().lower()
+        )
+        requested_ollama_model = (
+            request.ollama_model
+            or (self._settings.OLLAMA_MODEL if requested_provider == "ollama" else "")
+            or ""
+        ).strip()
+        requested_ollama_base_url = (
+            request.ollama_base_url
+            or (
+                self._settings.OLLAMA_BASE_URL
+                if requested_provider == "ollama"
+                else ""
+            )
+            or ""
+        ).strip()
+
         cache_input: dict[str, str | bool] = {
             "query": rewritten_query,
             "tone": request.tone,
             "depth": request.reasoning_depth,
             "require_citations": request.require_citations,
             "specialist": route_to_specialist(request.user_message).specialist,
+            "provider": requested_provider,
+            "ollama_model": requested_ollama_model,
+            "ollama_base_url": requested_ollama_base_url,
         }
         with trace.span("response_cache_lookup", input_data=cache_input) as span:
             cached_answer = self._response_cache.get(cache_input)

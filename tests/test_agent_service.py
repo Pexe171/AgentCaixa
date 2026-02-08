@@ -249,6 +249,57 @@ def test_agent_service_permite_override_para_ollama_por_requisicao(monkeypatch) 
     assert response.diagnostics.provider_used == "ollama"
     assert response.diagnostics.fallback_used is False
 
+
+
+def test_agent_service_nao_reutiliza_cache_entre_provedores_distintos(monkeypatch) -> None:
+    from rag_app.agent import service as service_module
+
+    settings = AppSettings(RESPONSE_CACHE_BACKEND="memory", LLM_PROVIDER="mock")
+    service = AgentService(settings=settings)
+
+    class FakeGateway:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, system_prompt: str, user_prompt: str, tools=None, tool_executor=None):
+            del system_prompt, user_prompt, tools, tool_executor
+            self.calls += 1
+            return service_module.LLMOutput(
+                text=f"Resposta mock #{self.calls}",
+                provider="mock",
+                model="mock-hag-v1",
+            )
+
+    fake_gateway = FakeGateway()
+    service._gateway = fake_gateway  # type: ignore[assignment]
+
+    def fake_ollama_generate(self, system_prompt: str, user_prompt: str, tools=None, tool_executor=None):
+        del self, system_prompt, user_prompt, tools, tool_executor
+        return service_module.LLMOutput(
+            text="Resposta via Ollama",
+            provider="ollama",
+            model="llama3.1",
+        )
+
+    monkeypatch.setattr(service_module.OllamaLLMGateway, "generate", fake_ollama_generate)
+
+    first = service.chat(
+        AgentChatRequest(user_message="Explique estratégia para reduzir latência.")
+    )
+    second = service.chat(
+        AgentChatRequest(
+            user_message="Explique estratégia para reduzir latência.",
+            llm_provider="ollama",
+            ollama_model="llama3.1",
+            ollama_base_url="http://localhost:11434",
+        )
+    )
+
+    assert first.diagnostics.provider_used == "mock"
+    assert second.diagnostics.provider_used == "ollama"
+    assert second.answer != first.answer
+    assert second.diagnostics.provider_used != "response-cache"
+
 def test_agent_service_retorna_cache_de_resposta_em_pergunta_repetida() -> None:
     settings = AppSettings(RESPONSE_CACHE_BACKEND="memory")
     service = AgentService(settings=settings)
