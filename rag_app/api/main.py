@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from rag_app.agent.schemas import (
@@ -21,11 +21,21 @@ from rag_app.agent.schemas import (
 )
 from rag_app.agent.service import AgentService
 from rag_app.config import load_settings
+from rag_app.integrations.whatsapp import (
+    EvolutionWhatsAppClient,
+    normalize_whatsapp_number,
+    parse_evolution_webhook,
+)
 
 settings = load_settings()
 agent_service = AgentService(settings=settings)
 
 app = FastAPI(title=settings.PROJECT_NAME)
+whatsapp_client = EvolutionWhatsAppClient(
+    base_url=settings.WHATSAPP_EVOLUTION_BASE_URL,
+    api_key=settings.WHATSAPP_EVOLUTION_API_KEY or "",
+    instance=settings.WHATSAPP_EVOLUTION_INSTANCE,
+)
 
 
 def _parse_audit_events(audit_file: str) -> list[dict[str, str]]:
@@ -197,3 +207,48 @@ def agent_scan(payload: AgentScanRequest) -> AgentScanResponse:
         return agent_service.scan_codebase(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/channels/whatsapp/evolution/webhook")
+def whatsapp_evolution_webhook(
+    payload: dict[str, Any],
+    x_webhook_secret: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Recebe eventos do WhatsApp e responde pelo canal configurado."""
+    if not settings.WHATSAPP_CHANNEL_ENABLED:
+        return {"status": "ignored", "reason": "canal-desabilitado"}
+
+    if settings.WHATSAPP_WEBHOOK_SECRET and (
+        x_webhook_secret != settings.WHATSAPP_WEBHOOK_SECRET
+    ):
+        raise HTTPException(status_code=401, detail="Webhook secret inválido")
+
+    incoming = parse_evolution_webhook(payload)
+    if incoming is None:
+        return {"status": "ignored", "reason": "evento-nao-suportado"}
+
+    if not whatsapp_client.is_enabled:
+        raise HTTPException(status_code=500, detail="Cliente WhatsApp não configurado")
+
+    chat_response = agent_service.chat(
+        AgentChatRequest(
+            user_message=incoming.text,
+            session_id=f"whatsapp:{incoming.remote_jid}",
+            tone="profissional",
+            reasoning_depth="padrao",
+            require_citations=False,
+        )
+    )
+    outbound_number = normalize_whatsapp_number(incoming.remote_jid)
+    answer_text = (
+        "🤖 *Agente Caixa*\n\n"
+        f"{chat_response.answer}\n\n"
+        "_Se quiser, peça mais detalhes ou um passo a passo._"
+    )
+    whatsapp_client.send_text(number=outbound_number, text=answer_text)
+
+    return {
+        "status": "processed",
+        "to": outbound_number,
+        "trace_id": chat_response.diagnostics.trace_id,
+    }
