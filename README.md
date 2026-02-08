@@ -11,13 +11,15 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
 - API FastAPI com:
   - `GET /health`
   - `POST /v1/agent/chat`
+  - `POST /v1/agent/chat/stream` (SSE)
   - `POST /v1/agent/scan`
 - Pipeline de chat com:
   - recuperação híbrida (lexical + vetorial) com reranking real dos 20 melhores candidatos e seleção final dos 5 mais relevantes;
   - etapa explícita de planejamento (`Plano de Execução`) antes da resposta final;
   - montagem de prompt com tom/profundidade e memória de sessão;
   - geração por `mock`, `openai` ou `ollama`;
-  - diagnósticos (latência, modelo, fallback).
+  - diagnósticos (latência, modelo, fallback);
+  - endpoint de streaming em tempo real via SSE para reduzir percepção de latência.
 - Scanner multi-linguagem de pasta para identificar problemas comuns:
   - possível segredo hardcoded;
   - logs de debug residuais;
@@ -162,6 +164,22 @@ curl -X POST http://localhost:8000/v1/agent/chat \
   }'
 ```
 
+
+### Chat com streaming (SSE)
+
+```bash
+curl -N -X POST http://localhost:8000/v1/agent/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_message": "Quero um plano completo para construir um agente de IA.",
+    "tone": "didatico",
+    "reasoning_depth": "profundo",
+    "require_citations": true
+  }'
+```
+
+O stream envia eventos `status`, `delta` e `done` no formato `text/event-stream`.
+
 ### Scan de pasta para debug
 
 ```bash
@@ -182,6 +200,29 @@ curl -X POST http://localhost:8000/v1/agent/scan \
 ```bash
 python -m rag_app.cli scan --folder /workspace/AgentCaixa --max-files 500
 ```
+
+
+## Avaliação de respostas (LLM-as-a-Judge)
+
+Foi adicionado o script `scripts/evaluate_agent_with_judge.py` para medir qualidade das respostas do agente em casos padrão.
+
+### Modo heurístico local (sem API externa)
+
+```bash
+python scripts/evaluate_agent_with_judge.py --base-url http://localhost:8000
+```
+
+### Modo OpenAI (juiz externo)
+
+```bash
+python scripts/evaluate_agent_with_judge.py \
+  --base-url http://localhost:8000 \
+  --judge-provider openai \
+  --judge-model gpt-4o-mini \
+  --openai-api-key "$OPENAI_API_KEY"
+```
+
+A saída é um JSON com nota por caso (1 a 10), justificativa e média consolidada.
 
 ## Testes
 

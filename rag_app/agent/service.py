@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from typing import Any, Protocol
 from uuid import uuid4
@@ -411,6 +412,40 @@ class AgentService:
             diagnostics=diagnostics,
             timestamp=datetime.now(timezone.utc),
         )
+
+    def chat_stream(
+        self,
+        request: AgentChatRequest,
+        chunk_size: int = 120,
+    ) -> Iterator[dict[str, Any]]:
+        """Executa chat e emite eventos incrementais para SSE."""
+
+        yield {
+            "event": "status",
+            "stage": "starting",
+            "message": "Iniciando pipeline do agente.",
+        }
+        response = self.chat(request)
+        yield {
+            "event": "status",
+            "stage": "streaming",
+            "message": "Transmitindo resposta em tempo real.",
+        }
+
+        answer = response.answer
+        for start in range(0, len(answer), chunk_size):
+            delta = answer[start : start + chunk_size]
+            if not delta:
+                continue
+            yield {"event": "delta", "delta": delta}
+
+        yield {
+            "event": "done",
+            "answer": response.answer,
+            "citations": [item.model_dump() for item in response.citations],
+            "diagnostics": response.diagnostics.model_dump(),
+            "timestamp": response.timestamp.isoformat(),
+        }
 
     def scan_codebase(self, request: AgentScanRequest) -> AgentScanResponse:
         """Executa varredura completa em pasta para suporte a debug."""
