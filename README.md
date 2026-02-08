@@ -443,8 +443,92 @@ No GitHub Actions (`.github/workflows/evaluate-agent.yml`), a API sobe localment
 - Sem chave, roda com judge heurístico local.
 - O job falha automaticamente quando a qualidade regrede além do limite definido.
 
+## 16) Como fazer o AgentCaixa "aprender" com DOCX (e ajustar parâmetros)
 
-## 16) Solução de problemas (troubleshooting)
+Se a sua ideia é ensinar o agente com conteúdo interno (procedimentos, normas, playbooks), o fluxo recomendado é:
+
+1. converter/normalizar documentos;
+2. transformar o conteúdo em blocos utilizáveis;
+3. ativar busca vetorial + memória semântica;
+4. ajustar parâmetros de recuperação para melhorar relevância.
+
+### 16.1 Ingestão de DOCX (CLI)
+
+O projeto já traz comando de ingestão via CLI:
+
+```bash
+python -m rag_app.cli ingest --input ./docs/meu_procedimento.docx
+```
+
+Esse comando:
+
+- converte o arquivo para DOCX quando necessário;
+- extrai blocos de conteúdo;
+- gera um `data/processed/blocks.jsonl` com os trechos processados.
+
+Você pode repetir para novos documentos e versionar seu diretório `docs/` para manter histórico de conhecimento.
+
+### 16.2 Formatos além de DOCX
+
+Para arquivos mais complexos (DOCX com tabelas e layouts), instale os extras de parser:
+
+```bash
+pip install -e .[parser]
+```
+
+Com isso, o pipeline tenta extração estruturada com fallback automático entre Docling/Unstructured e parser interno.
+
+### 16.3 Ativando vetores de aprendizado (RAG vetorial)
+
+No `.env`, habilite um provider vetorial (recomendação local: Qdrant):
+
+```bash
+VECTOR_PROVIDER=qdrant
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=rag_app_documents
+
+EMBEDDING_CACHE_BACKEND=redis
+EMBEDDING_CACHE_REDIS_URL=redis://localhost:6379/0
+```
+
+E suba a infra:
+
+```bash
+docker compose -f docker-compose.infra.yml up -d
+```
+
+### 16.4 Parâmetros para melhorar qualidade de resposta
+
+Você pode calibrar estes parâmetros no `.env` para evoluir o comportamento do agente:
+
+- `RETRIEVE_TOP_K_DEFAULT`: quantidade de trechos recuperados por busca.
+- `HYBRID_ALPHA`: peso entre estratégias de recuperação.
+- `STRICT_MIN_SCORE`: corte mínimo de relevância.
+- `MAX_SNIPPET_CHARS`: tamanho máximo de cada trecho no contexto.
+- `SEMANTIC_MEMORY_RETRIEVE_TOP_K`: quantas memórias semânticas antigas recuperar.
+- `SEMANTIC_MEMORY_SUMMARY_INTERVAL`: frequência de sumarização da memória.
+
+Exemplo de ajuste inicial:
+
+```bash
+RETRIEVE_TOP_K_DEFAULT=8
+HYBRID_ALPHA=0.70
+STRICT_MIN_SCORE=0.25
+MAX_SNIPPET_CHARS=280
+SEMANTIC_MEMORY_RETRIEVE_TOP_K=4
+SEMANTIC_MEMORY_SUMMARY_INTERVAL=3
+```
+
+### 16.5 Ciclo prático de melhoria contínua
+
+1. Ingerir documentos reais da operação (`python -m rag_app.cli ingest ...`).
+2. Rodar perguntas de validação no `/v1/agent/chat`.
+3. Medir com `scripts/evaluate_agent_with_judge.py`.
+4. Ajustar parâmetros (`TOP_K`, `HYBRID_ALPHA`, score mínimo).
+5. Repetir ciclo até estabilizar qualidade + latência.
+
+
+## 17) Solução de problemas (troubleshooting)
 
 ### Erro: `ImportError: cannot import name 'scan_folder'`
 
