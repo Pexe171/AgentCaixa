@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import time
 import json
+import time
 from datetime import datetime, timezone
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import uuid4
 
 from rag_app.agent.guardrails import append_audit_event, validate_user_message
@@ -15,6 +15,7 @@ from rag_app.agent.llm_gateway import (
     MockLLMGateway,
     OllamaLLMGateway,
     OpenAILLMGateway,
+    ToolExecutor,
 )
 from rag_app.agent.scanner import scan_folder
 from rag_app.agent.schemas import (
@@ -23,6 +24,7 @@ from rag_app.agent.schemas import (
     AgentDiagnostics,
     AgentScanRequest,
     AgentScanResponse,
+    ContextSnippet,
 )
 from rag_app.agent.session_memory import SessionMemoryStore, SQLiteSessionMemoryStore
 from rag_app.agent.vector_index import VectorRetriever
@@ -30,14 +32,21 @@ from rag_app.config import AppSettings
 
 
 class LLMGateway(Protocol):
-    def generate(self, system_prompt: str, user_prompt: str) -> LLMOutput:
-        """Gera resposta textual a partir de prompts."""
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[dict[str, Any]] | None = None,
+        tool_executor: ToolExecutor | None = None,
+    ) -> LLMOutput:
+        """Gera resposta textual a partir de prompts e tool calling opcional."""
 
 
 def _build_planning_prompt(user_message: str, memory_blocks: list[str]) -> str:
     memory_text = "\n".join(memory_blocks) if memory_blocks else "Sem histórico prévio"
     return (
-        "Antes da resposta final, elabore um Plano de Execução curto para resolver o pedido.\n"
+        "Antes da resposta final, elabore um Plano de Execução curto "
+        "para resolver o pedido.\n"
         "Formato obrigatório:\n"
         "1) Objetivo\n"
         "2) Contextos necessários\n"
@@ -90,7 +99,9 @@ def _deduplicate_snippets(snippets: list[ContextSnippet]) -> list[ContextSnippet
     return list(deduplicated.values())
 
 
-def _rank_candidates(query: str, snippets: list[ContextSnippet]) -> list[ContextSnippet]:
+def _rank_candidates(
+    query: str, snippets: list[ContextSnippet]
+) -> list[ContextSnippet]:
     query_tokens = {token.strip(".,:;!?()[]{}\"'").lower() for token in query.split()}
     if not query_tokens:
         return snippets
@@ -120,7 +131,8 @@ def _build_rerank_prompt(query: str, snippets: list[ContextSnippet]) -> str:
     ]
     return (
         "Reordene os trechos abaixo para responder a pergunta com máxima precisão. "
-        "Retorne apenas JSON no formato {\"selected_indexes\":[i1,i2,...]} com até 5 índices únicos.\n"
+        'Retorne apenas JSON no formato {"selected_indexes":[i1,i2,...]} '
+        "com até 5 índices únicos.\n"
         f"Pergunta: {query}\n"
         f"Trechos: {json.dumps(serialized, ensure_ascii=False)}"
     )
@@ -153,6 +165,30 @@ def _extract_selected_indexes(raw_text: str, max_index: int) -> list[int]:
     return valid_indexes[:5]
 
 
+def _build_openai_tools() -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "function",
+            "name": "consultar_caixa",
+            "description": (
+                "Consulta dados consolidados do cliente na Caixa a partir "
+                "do id_cliente."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id_cliente": {
+                        "type": "string",
+                        "description": "Identificador único do cliente.",
+                    }
+                },
+                "required": ["id_cliente"],
+                "additionalProperties": False,
+            },
+        }
+    ]
+
+
 def _resolve_gateway(settings: AppSettings) -> LLMGateway:
     if (
         settings.LLM_PROVIDER == "openai"
@@ -173,6 +209,33 @@ def _resolve_gateway(settings: AppSettings) -> LLMGateway:
         )
 
     return MockLLMGateway()
+
+
+def _build_tool_executor(context_blocks: list[str]) -> ToolExecutor:
+    def execute(tool_name: str, arguments: dict[str, Any]) -> Any:
+        if tool_name != "consultar_caixa":
+            return {"erro": f"Ferramenta desconhecida: {tool_name}"}
+
+        client_id = str(arguments.get("id_cliente", "")).strip()
+        if not client_id:
+            return {"erro": "Parâmetro id_cliente é obrigatório."}
+
+        normalized_id = client_id.lower()
+        related_context = [
+            block for block in context_blocks if normalized_id in block.lower()
+        ][:3]
+
+        return {
+            "id_cliente": client_id,
+            "status": "consulta_realizada",
+            "fontes_relacionadas": related_context,
+            "resumo": (
+                "Consulta simulada executada. Utilize os dados retornados "
+                "para compor a resposta."
+            ),
+        }
+
+    return execute
 
 
 def _resolve_session_memory(
@@ -209,7 +272,8 @@ class AgentService:
         plan_output = self._gateway.generate(
             system_prompt=(
                 f"{system_prompt} "
-                "Você está na etapa de planejamento e não deve escrever a resposta final."
+                "Você está na etapa de planejamento e não deve escrever "
+                "a resposta final."
             ),
             user_prompt=planning_prompt,
         )
@@ -316,6 +380,8 @@ class AgentService:
         llm_output = self._gateway.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
+            tools=_build_openai_tools(),
+            tool_executor=_build_tool_executor(context_blocks=context_blocks),
         )
 
         if request.session_id:
