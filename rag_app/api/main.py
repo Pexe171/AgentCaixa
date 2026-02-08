@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 
 from rag_app.agent.schemas import (
     AgentChatRequest,
@@ -29,6 +32,19 @@ def health() -> dict[str, str]:
 def agent_chat(payload: AgentChatRequest) -> AgentChatResponse:
     """Executa fluxo completo do agente HAG."""
     return agent_service.chat(payload)
+
+
+@app.post("/v1/agent/chat/stream")
+def agent_chat_stream(payload: AgentChatRequest) -> StreamingResponse:
+    """Executa fluxo de chat com transmissão incremental via SSE."""
+
+    def event_stream() -> str:
+        for event in agent_service.chat_stream(payload):
+            event_name = str(event.get("event", "message"))
+            serialized = json.dumps(event, ensure_ascii=False)
+            yield f"event: {event_name}\ndata: {serialized}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/v1/agent/scan", response_model=AgentScanResponse)

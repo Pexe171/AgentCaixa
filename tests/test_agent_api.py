@@ -81,3 +81,25 @@ def test_agent_scan_can_run_linters(tmp_path: Path) -> None:
     payload = response.json()
     assert "linter_findings" in payload
     assert "Linters executados: sim" in payload["summary"]
+
+
+def test_agent_chat_stream_returns_sse_events() -> None:
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/v1/agent/chat/stream",
+        json={
+            "user_message": "Explique como melhorar monitoramento do agente.",
+            "tone": "tecnico",
+            "reasoning_depth": "padrao",
+            "require_citations": True,
+        },
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        body = "".join(response.iter_text())
+
+    assert "event: status" in body
+    assert "event: delta" in body
+    assert "event: done" in body
