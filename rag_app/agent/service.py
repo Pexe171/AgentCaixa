@@ -23,7 +23,7 @@ from rag_app.agent.schemas import (
     AgentScanRequest,
     AgentScanResponse,
 )
-from rag_app.agent.session_memory import SessionMemoryStore
+from rag_app.agent.session_memory import SessionMemoryStore, SQLiteSessionMemoryStore
 from rag_app.agent.vector_index import VectorRetriever
 from rag_app.config import AppSettings
 
@@ -85,13 +85,21 @@ def _resolve_gateway(settings: AppSettings) -> LLMGateway:
     return MockLLMGateway()
 
 
+def _resolve_session_memory(
+    settings: AppSettings,
+) -> SessionMemoryStore | SQLiteSessionMemoryStore:
+    if settings.SESSION_STORE_BACKEND == "sqlite":
+        return SQLiteSessionMemoryStore(database_path=settings.SESSION_DB_PATH)
+    return SessionMemoryStore()
+
+
 class AgentService:
     """Serviço principal de execução do agente."""
 
     def __init__(self, settings: AppSettings) -> None:
         self._settings = settings
         self._gateway = _resolve_gateway(settings)
-        self._memory = SessionMemoryStore()
+        self._memory = _resolve_session_memory(settings)
         self._vector_retriever = VectorRetriever(settings=settings)
 
     def _estimate_cost(self, prompt: str, answer: str) -> float:

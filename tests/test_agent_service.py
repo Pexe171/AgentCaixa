@@ -85,3 +85,26 @@ def test_agent_guardrail_blocks_malicious_prompt() -> None:
 
     assert response.diagnostics.provider_used == "guardrail"
     assert "bloqueada" in response.answer.lower()
+
+
+def test_agent_service_uses_sqlite_memory_backend(tmp_path: Path) -> None:
+    database_path = tmp_path / "chat_memory.db"
+    settings = AppSettings(
+        SESSION_STORE_BACKEND="sqlite",
+        SESSION_DB_PATH=str(database_path),
+    )
+    service = AgentService(settings=settings)
+
+    first_response = service.chat(
+        AgentChatRequest(user_message="Mensagem inicial", session_id="sessao-db")
+    )
+    second_response = service.chat(
+        AgentChatRequest(
+            user_message="Mensagem de continuidade",
+            session_id="sessao-db",
+        )
+    )
+
+    assert first_response.answer
+    assert second_response.answer
+    assert database_path.exists()

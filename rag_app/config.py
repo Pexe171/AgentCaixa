@@ -33,7 +33,9 @@ class AppSettings(BaseSettings):
     OLLAMA_MODEL: str | None = None
     OLLAMA_TIMEOUT_SECONDS: float = 30.0
     AGENT_NAME: str = "HAG-PTBR"
-    VECTOR_PROVIDER: Literal["none", "pgvector", "qdrant", "weaviate"] = "none"
+    VECTOR_PROVIDER: Literal["none", "faiss", "qdrant", "pgvector", "weaviate"] = "none"
+    SESSION_STORE_BACKEND: Literal["memory", "sqlite"] = "memory"
+    SESSION_DB_PATH: str = "data/memory/session_memory.db"
     ENABLE_LINTER_SCAN: bool = False
     AUDIT_LOG_PATH: str = "data/audit/agent_audit.log"
     COST_PER_1K_TOKENS_USD: float = 0.002
