@@ -87,24 +87,36 @@ Backends disponíveis para ambos:
 
 ---
 
-## 5) Infraestrutura local (recomendada)
+## 5) Subir tudo com **um único comando Docker**
 
-O repositório inclui `docker-compose.infra.yml` com:
+Se você está em VPS com apenas um terminal, use o `docker-compose.yml` principal.
 
-- `qdrant` (porta 6333)
-- `redis` (porta 6379)
+Ele sobe de uma vez:
 
-Subir infraestrutura:
+- `api` (FastAPI + motor de raciocínio do agente)
+- `frontend` (Streamlit)
+- `qdrant` (vetorial)
+- `redis` (cache)
 
-```bash
-docker compose -f docker-compose.infra.yml up -d
-```
-
-Parar infraestrutura:
+### 5.1 Comando único (build + execução)
 
 ```bash
-docker compose -f docker-compose.infra.yml down
+docker compose up --build -d
 ```
+
+### 5.2 URLs de acesso
+
+- Front-end: `http://localhost:8501`
+- API: `http://localhost:8000`
+- Healthcheck: `http://localhost:8000/health`
+
+### 5.3 Parar tudo
+
+```bash
+docker compose down
+```
+
+> Se você quiser manter somente a infraestrutura (sem API/front), o arquivo legado `docker-compose.infra.yml` continua disponível.
 
 ---
 
@@ -198,7 +210,7 @@ Para instalar extras de parser:
 pip install -e .[parser]
 ```
 
-## 8) Como executar
+## 8) Como executar sem Docker (modo desenvolvimento)
 
 ### 8.1 API
 
