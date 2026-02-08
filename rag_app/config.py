@@ -65,6 +65,11 @@ class AppSettings(BaseSettings):
     AUDIT_LOG_PATH: str = "data/audit/agent_audit.log"
     COST_PER_1K_TOKENS_USD: float = 0.002
     JUDGE_RESULTS_PATH: str = "data/evals/judge_results.json"
+    OBSERVABILITY_ENABLED: bool = False
+    OBSERVABILITY_PROVIDER: Literal["none", "langfuse", "langsmith"] = "none"
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    LANGFUSE_PUBLIC_KEY: str | None = Field(default=None, repr=False)
+    LANGFUSE_SECRET_KEY: str | None = Field(default=None, repr=False)
     WHATSAPP_CHANNEL_ENABLED: bool = False
     WHATSAPP_PROVIDER: Literal["evolution"] = "evolution"
     WHATSAPP_EVOLUTION_BASE_URL: str = "http://localhost:8080"

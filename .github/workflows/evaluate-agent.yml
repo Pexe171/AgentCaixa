@@ -1,0 +1,65 @@
+name: Evaluate Agent Quality
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  evaluate-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,observability]
+
+      - name: Start API
+        run: |
+          nohup uvicorn rag_app.api.main:app --host 0.0.0.0 --port 8000 > /tmp/uvicorn.log 2>&1 &
+          sleep 5
+
+      - name: Evaluate with OpenAI Judge (if key exists)
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/evaluate_agent_with_judge.py \
+            --base-url http://127.0.0.1:8000 \
+            --judge-provider openai \
+            --judge-model gpt-4o-mini \
+            --openai-api-key "$OPENAI_API_KEY" \
+            --output-path data/evals/judge_results.json \
+            --baseline-path data/evals/judge_baseline.json \
+            --min-media 6.5 \
+            --max-regression 0.5
+
+      - name: Evaluate with local heuristic judge (fallback)
+        if: ${{ secrets.OPENAI_API_KEY == '' }}
+        run: |
+          python scripts/evaluate_agent_with_judge.py \
+            --base-url http://127.0.0.1:8000 \
+            --judge-provider heuristico \
+            --output-path data/evals/judge_results.json \
+            --baseline-path data/evals/judge_baseline.json \
+            --min-media 6.0 \
+            --max-regression 0.5
+
+      - name: Upload evaluation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: judge-results
+          path: |
+            data/evals/judge_results.json
+            data/evals/judge_baseline.json
