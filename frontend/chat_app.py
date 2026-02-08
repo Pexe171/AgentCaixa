@@ -21,11 +21,11 @@ with st.sidebar:
     st.header("Configurações")
     llm_provider = st.selectbox(
         "Provedor de LLM",
-        ["ollama", "padrao-backend", "openai", "mock"],
+        ["ollama", "padrao-backend", "openai"],
         index=0,
         help=(
             "Por padrão, a UI usa Ollama. "
-            "Use padrao-backend para respeitar o servidor ou selecione openai/mock."
+            "Use padrao-backend para respeitar o servidor ou selecione openai/ollama."
         ),
     )
     ollama_model = st.text_input(
@@ -103,12 +103,6 @@ if prompt:
 
                 if diagnostics:
                     provider_used = str(diagnostics.get("provider_used", "")).lower()
-                    if provider_used == "mock":
-                        st.warning(
-                            "A resposta foi gerada em MODO MOCK. "
-                            "Configure OPENAI_API_KEY + OPENAI_MODEL "
-                            "ou use override para Ollama para obter resposta real."
-                        )
                     content += (
                         "\n\n<sub>"
                         f"provider={provider_used or diagnostics.get('provider_used')} | "

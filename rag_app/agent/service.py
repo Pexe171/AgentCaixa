@@ -18,7 +18,6 @@ from rag_app.agent.image_vector_analysis import (
 from rag_app.agent.knowledge import retrieve_context
 from rag_app.agent.llm_gateway import (
     LLMOutput,
-    MockLLMGateway,
     OllamaLLMGateway,
     OpenAILLMGateway,
     ToolExecutor,
@@ -204,8 +203,6 @@ def _normalize_translated_query(user_message: str, translated: str) -> str:
         return user_message
     if len(cleaned) < 12:
         return user_message
-    if "[modo mock]" in cleaned.lower():
-        return user_message
     return cleaned
 
 
@@ -261,7 +258,15 @@ def _resolve_gateway(
             timeout_s=settings.OLLAMA_TIMEOUT_SECONDS,
         )
 
-    return MockLLMGateway()
+    if provider == "openai":
+        raise ValueError(
+            "OPENAI_API_KEY e OPENAI_MODEL são obrigatórios quando llm_provider=openai."
+        )
+
+    raise ValueError(
+        "Configuração inválida de LLM. Use ollama com OLLAMA_MODEL definido "
+        "(padrão: llama3.2) ou configure openai corretamente."
+    )
 
 
 def _build_tool_executor(context_blocks: list[str]) -> ToolExecutor:
@@ -627,7 +632,7 @@ class AgentService:
             model=llm_output.model,
             latency_ms=latency_ms,
             retrieved_context_count=len(snippets),
-            fallback_used=llm_output.provider == "mock",
+            fallback_used=False,
             trace_id=trace_id,
             estimated_cost_usd=self._estimate_cost(user_prompt, llm_output.text),
             routed_specialist=routing.specialist,
