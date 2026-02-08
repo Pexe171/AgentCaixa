@@ -233,9 +233,16 @@ def _build_openai_tools() -> list[dict[str, Any]]:
     ]
 
 
-def _resolve_gateway(settings: AppSettings) -> LLMGateway:
+def _resolve_gateway(
+    settings: AppSettings,
+    provider_override: str | None = None,
+    ollama_model_override: str | None = None,
+    ollama_base_url_override: str | None = None,
+) -> LLMGateway:
+    provider = (provider_override or settings.LLM_PROVIDER).lower()
+
     if (
-        settings.LLM_PROVIDER == "openai"
+        provider == "openai"
         and settings.OPENAI_API_KEY
         and settings.OPENAI_MODEL
     ):
@@ -245,10 +252,12 @@ def _resolve_gateway(settings: AppSettings) -> LLMGateway:
             timeout_s=settings.OPENAI_TIMEOUT_SECONDS,
         )
 
-    if settings.LLM_PROVIDER == "ollama" and settings.OLLAMA_MODEL:
+    ollama_model = (ollama_model_override or settings.OLLAMA_MODEL or "").strip()
+    ollama_base_url = (ollama_base_url_override or settings.OLLAMA_BASE_URL).strip()
+    if provider == "ollama" and ollama_model:
         return OllamaLLMGateway(
-            base_url=settings.OLLAMA_BASE_URL,
-            model=settings.OLLAMA_MODEL,
+            base_url=ollama_base_url,
+            model=ollama_model,
             timeout_s=settings.OLLAMA_TIMEOUT_SECONDS,
         )
 
@@ -329,12 +338,14 @@ class AgentService:
         user_message: str,
         memory_blocks: list[str],
         system_prompt: str,
+        gateway: LLMGateway | None = None,
     ) -> str:
         planning_prompt = _build_planning_prompt(
             user_message=user_message,
             memory_blocks=memory_blocks,
         )
-        plan_output = self._gateway.generate(
+        active_gateway = gateway or self._gateway
+        plan_output = active_gateway.generate(
             system_prompt=(
                 f"{system_prompt} "
                 "Você está na etapa de planejamento e não deve escrever "
@@ -348,9 +359,11 @@ class AgentService:
         self,
         user_message: str,
         system_prompt: str,
+        gateway: LLMGateway | None = None,
     ) -> str:
         try:
-            translation_output = self._gateway.generate(
+            active_gateway = gateway or self._gateway
+            translation_output = active_gateway.generate(
                 system_prompt=(
                     f"{system_prompt} "
                     "Sua tarefa agora é apenas traduzir a consulta para recuperação."
@@ -365,6 +378,7 @@ class AgentService:
         self,
         query: str,
         snippets: list[ContextSnippet],
+        gateway: LLMGateway | None = None,
     ) -> list[ContextSnippet]:
         if not snippets:
             return []
@@ -373,7 +387,8 @@ class AgentService:
         rerank_prompt = _build_rerank_prompt(query=query, snippets=ranked_candidates)
 
         try:
-            rerank_output = self._gateway.generate(
+            active_gateway = gateway or self._gateway
+            rerank_output = active_gateway.generate(
                 system_prompt=(
                     "Você é um reranker especializado em recuperação híbrida. "
                     "Responda estritamente em JSON válido."
@@ -392,6 +407,13 @@ class AgentService:
         return ranked_candidates[:5]
 
     def chat(self, request: AgentChatRequest) -> AgentChatResponse:
+        active_gateway = _resolve_gateway(
+            settings=self._settings,
+            provider_override=request.llm_provider,
+            ollama_model_override=request.ollama_model,
+            ollama_base_url_override=request.ollama_base_url,
+        )
+
         start = time.perf_counter()
         trace_id = str(uuid4())
         trace = self._tracer.start_trace(
@@ -405,7 +427,7 @@ class AgentService:
                 "require_citations": request.require_citations,
             },
             metadata={
-                "llm_provider": self._settings.LLM_PROVIDER,
+                "llm_provider": request.llm_provider or self._settings.LLM_PROVIDER,
                 "vector_provider": self._settings.VECTOR_PROVIDER,
             },
         )
@@ -446,6 +468,7 @@ class AgentService:
                     "Você otimiza consultas para recuperação de conhecimento "
                     "em ambientes financeiros e corporativos."
                 ),
+                gateway=active_gateway,
             )
             span.update(output=rewritten_query)
 
@@ -495,6 +518,7 @@ class AgentService:
             snippets = self._rerank_snippets(
                 query=rewritten_query,
                 snippets=_deduplicate_snippets(lexical_snippets + vector_snippets),
+                gateway=active_gateway,
             )
             span.update(
                 output={
@@ -539,6 +563,7 @@ class AgentService:
                 user_message=request.user_message,
                 memory_blocks=memory_blocks,
                 system_prompt=system_prompt,
+                gateway=active_gateway,
             )
             span.update(output=execution_plan)
         user_prompt = _build_user_prompt(
@@ -555,7 +580,7 @@ class AgentService:
                 "user_prompt": user_prompt,
             },
         ) as span:
-            llm_output = self._gateway.generate(
+            llm_output = active_gateway.generate(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 tools=_build_openai_tools(),
