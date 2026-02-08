@@ -17,6 +17,7 @@ dependencies = [
   "typer",
   "python-dotenv",
   "python-docx",
+  "pillow",
 ]
 
 [project.optional-dependencies]

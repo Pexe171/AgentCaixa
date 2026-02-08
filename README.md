@@ -12,6 +12,7 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
   - `GET /health`
   - `POST /v1/agent/chat`
   - `POST /v1/agent/chat/stream` (SSE)
+  - `POST /v1/agent/image/analyze` (análise vetorial de imagem local)
   - `POST /v1/agent/scan`
 - Pipeline de chat com:
   - recuperação híbrida (lexical + vetorial) com reranking real dos 20 melhores candidatos e seleção final dos 5 mais relevantes;
@@ -67,6 +68,33 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
 2. Percorre arquivos suportados por extensão.
 3. Executa regras simples de análise linha a linha.
 4. Consolida relatório com issues + resumo executivo.
+
+
+## Análise vetorial de imagem (nativa, sem API externa)
+
+O agente agora suporta análise de dados em imagem com pipeline local para cenários de ciência de dados e IA full stack:
+
+- leitura local da imagem (`image_path`);
+- extração de vetor denso com histogramas de brilho, bordas e canais RGB;
+- métricas quantitativas: média/desvio de brilho, densidade de bordas e entropia;
+- paleta dominante de cores;
+- comparação opcional entre imagem alvo e referência por similaridade vetorial (cosseno).
+
+Endpoint:
+
+- `POST /v1/agent/image/analyze`
+
+Payload exemplo:
+
+```json
+{
+  "image_path": "/dados/imagens/documento.png",
+  "reference_image_path": "/dados/imagens/base.png"
+}
+```
+
+Resposta inclui `vector_dimensions`, `vector_preview`, `top_palette` e `similarity_score` (quando houver referência).
+
 
 ## Configuração (`.env`)
 

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from rag_app.api.main import app
@@ -117,3 +119,40 @@ def test_admin_metrics_and_dashboard_endpoints() -> None:
     dashboard_response = client.get("/admin/dashboard")
     assert dashboard_response.status_code == 200
     assert "Monitorização do Agente" in dashboard_response.text
+
+
+def test_agent_image_analysis_returns_vector_metrics(tmp_path: Path) -> None:
+    pytest.importorskip("PIL", reason="Pillow não instalado")
+    from PIL import Image
+
+    image_path = tmp_path / "image.png"
+    reference_path = tmp_path / "reference.png"
+
+    Image.new("RGB", (40, 24), color=(80, 120, 200)).save(image_path)
+    Image.new("RGB", (40, 24), color=(82, 121, 199)).save(reference_path)
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/agent/image/analyze",
+        json={
+            "image_path": str(image_path),
+            "reference_image_path": str(reference_path),
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["vector_dimensions"] > 100
+    assert payload["similarity_score"] is not None
+    assert payload["top_palette"]
+
+
+def test_agent_image_analysis_invalid_path_returns_400() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/agent/image/analyze",
+        json={"image_path": "/caminho/invalido/imagem.png"},
+    )
+
+    assert response.status_code == 400
