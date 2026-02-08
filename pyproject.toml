@@ -18,6 +18,7 @@ dependencies = [
   "python-dotenv",
   "python-docx",
   "pillow",
+  "requests",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +31,10 @@ dev = [
   "pytest",
   "ruff",
   "mypy",
+]
+
+frontend = [
+  "streamlit",
 ]
 
 [tool.ruff]

@@ -255,3 +255,86 @@ Para seu cenário (rodar no computador e evitar custo cloud):
 - ✅ Mantenha Pinecone desabilitado.
 - ✅ Ative cache de embeddings e respostas para reduzir custo de inferência.
 
+
+---
+
+## 11) Interface de Chat (Frontend) com Streamlit
+
+Agora o projeto inclui uma interface moderna de chat para uso por usuários finais, sem precisar Swagger ou cURL.
+
+Arquivo principal:
+
+- `frontend/chat_app.py`
+
+### 11.1 Instalação
+
+```bash
+pip install -e .[frontend]
+```
+
+### 11.2 Execução
+
+Com a API FastAPI rodando na porta 8000:
+
+```bash
+streamlit run frontend/chat_app.py
+```
+
+Abrirá no navegador uma interface com:
+
+- histórico de conversa;
+- seleção de tom e profundidade de raciocínio;
+- controle para exigir citações;
+- exibição de diagnóstico (provider, latência e trace_id).
+
+Você pode trocar o endpoint da API via variável:
+
+```bash
+export AGENT_API_URL=http://localhost:8000/v1/agent/chat
+```
+
+---
+
+## 12) Integração com WhatsApp via Evolution API
+
+Foi adicionada integração de canal com WhatsApp para analistas consultarem o AgentCaixa diretamente no celular.
+
+### 12.1 Endpoint de webhook
+
+```http
+POST /v1/channels/whatsapp/evolution/webhook
+```
+
+O endpoint:
+
+1. valida segredo de webhook (opcional);
+2. interpreta evento `messages.upsert` da Evolution API;
+3. chama o fluxo `/v1/agent/chat` internamente;
+4. envia a resposta de volta para o WhatsApp.
+
+### 12.2 Variáveis de ambiente
+
+```bash
+WHATSAPP_CHANNEL_ENABLED=true
+WHATSAPP_PROVIDER=evolution
+WHATSAPP_EVOLUTION_BASE_URL=http://localhost:8080
+WHATSAPP_EVOLUTION_INSTANCE=agentecaixa
+WHATSAPP_EVOLUTION_API_KEY=seu_token
+WHATSAPP_WEBHOOK_SECRET=segredo_compartilhado
+```
+
+### 12.3 Exemplo de registro de webhook na Evolution
+
+No painel/instância da Evolution API, configure o webhook para apontar para:
+
+```text
+https://SEU_HOST/v1/channels/whatsapp/evolution/webhook
+```
+
+Inclua o header:
+
+```text
+x-webhook-secret: segredo_compartilhado
+```
+
+> Dica: em ambiente de desenvolvimento local, use túnel (ex.: ngrok/cloudflared) para expor o FastAPI.

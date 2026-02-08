@@ -65,6 +65,12 @@ class AppSettings(BaseSettings):
     AUDIT_LOG_PATH: str = "data/audit/agent_audit.log"
     COST_PER_1K_TOKENS_USD: float = 0.002
     JUDGE_RESULTS_PATH: str = "data/evals/judge_results.json"
+    WHATSAPP_CHANNEL_ENABLED: bool = False
+    WHATSAPP_PROVIDER: Literal["evolution"] = "evolution"
+    WHATSAPP_EVOLUTION_BASE_URL: str = "http://localhost:8080"
+    WHATSAPP_EVOLUTION_INSTANCE: str = ""
+    WHATSAPP_EVOLUTION_API_KEY: str | None = Field(default=None, repr=False)
+    WHATSAPP_WEBHOOK_SECRET: str | None = Field(default=None, repr=False)
 
     @field_validator("HYBRID_ALPHA")
     def _validate_hybrid_alpha(cls, value: float) -> float:
