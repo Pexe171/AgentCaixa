@@ -464,3 +464,26 @@ Alguns módulos vetoriais usam extras opcionais. Instale o pacote com extras par
 pip install -e .[dev,rag]
 ```
 
+
+---
+
+## 8) Solução de erro comum ao subir a API
+
+Se ao iniciar com `uvicorn rag_app.api.main:app` aparecer erro de importação envolvendo `rag_app.agent.vector_index` (por exemplo `_cosine_similarity`), o projeto já inclui fallback local determinístico para embeddings e similaridade.
+
+Checklist rápido:
+
+1. Atualize o código para a versão mais recente da branch.
+2. Garanta que o ambiente virtual ativo corresponde ao diretório atual.
+3. Rode os testes de recuperação vetorial:
+
+```bash
+pytest -q tests/test_vector_index.py
+```
+
+Esse fluxo valida:
+
+- providers vetoriais em modo fallback local;
+- estratégia de ranqueamento híbrida (semântica + lexical);
+- cache de embeddings em memória;
+- compatibilidade de importação do serviço principal da API.
