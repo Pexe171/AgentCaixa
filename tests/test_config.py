@@ -1,4 +1,4 @@
-from rag_app.config import load_settings
+from rag_app.config import AppSettings, load_settings
 
 
 def test_load_settings_defaults(monkeypatch) -> None:
@@ -23,3 +23,10 @@ def test_load_settings_env_override(monkeypatch) -> None:
     assert settings.PROJECT_NAME == "rag_app_local"
     assert settings.LOG_LEVEL == "DEBUG"
     assert settings.RETRIEVE_TOP_K_DEFAULT == 8
+
+
+def test_embedding_cache_ttl_must_be_positive() -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        AppSettings(EMBEDDING_CACHE_TTL_SECONDS=0)

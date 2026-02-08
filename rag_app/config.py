@@ -34,6 +34,10 @@ class AppSettings(BaseSettings):
     OLLAMA_TIMEOUT_SECONDS: float = 30.0
     AGENT_NAME: str = "HAG-PTBR"
     VECTOR_PROVIDER: Literal["none", "faiss", "qdrant", "pgvector", "weaviate"] = "none"
+    EMBEDDING_CACHE_BACKEND: Literal["none", "memory", "redis"] = "memory"
+    EMBEDDING_CACHE_REDIS_URL: str = "redis://localhost:6379/0"
+    EMBEDDING_CACHE_KEY_PREFIX: str = "rag_app:embedding"
+    EMBEDDING_CACHE_TTL_SECONDS: int = 86400
     SESSION_STORE_BACKEND: Literal["memory", "sqlite"] = "memory"
     SESSION_DB_PATH: str = "data/memory/session_memory.db"
     SEMANTIC_MEMORY_BACKEND: Literal["none", "sqlite"] = "sqlite"
@@ -75,6 +79,12 @@ class AppSettings(BaseSettings):
     def _validate_semantic_memory_positive(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("Semantic memory values must be greater than 0.")
+        return value
+
+    @field_validator("EMBEDDING_CACHE_TTL_SECONDS")
+    def _validate_embedding_cache_ttl(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("EMBEDDING_CACHE_TTL_SECONDS must be greater than 0.")
         return value
 
 

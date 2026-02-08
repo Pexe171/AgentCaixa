@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from rag_app.agent.schemas import ContextSnippet
@@ -58,17 +59,32 @@ def _token_overlap_score(query: str, text: str) -> float:
     return min(1.0, len(overlap) / max(1, len(query_tokens)))
 
 
-def retrieve_context(query: str, top_k: int = 3) -> list[ContextSnippet]:
-    """Recupera contexto por matching lexical simples."""
-
-    scored = [
-        ContextSnippet(
-            source=item.source,
-            content=item.content,
-            score=_token_overlap_score(query=query, text=item.content),
-        )
-        for item in DEFAULT_KNOWLEDGE_BASE
+def _split_sentences(text: str) -> list[str]:
+    sentences = [
+        sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence
     ]
+    return sentences or [text]
 
-    ranked = sorted(scored, key=lambda snippet: snippet.score, reverse=True)
+
+def retrieve_context(query: str, top_k: int = 3) -> list[ContextSnippet]:
+    """Recupera contexto com estratégia small-to-big (frase -> parágrafo)."""
+
+    best_by_parent: dict[tuple[str, str], ContextSnippet] = {}
+    for item in DEFAULT_KNOWLEDGE_BASE:
+        for sentence in _split_sentences(item.content):
+            score = _token_overlap_score(query=query, text=sentence)
+            key = (item.source, item.content)
+            existing = best_by_parent.get(key)
+            if existing is None or score > existing.score:
+                best_by_parent[key] = ContextSnippet(
+                    source=item.source,
+                    content=item.content,
+                    score=score,
+                )
+
+    ranked = sorted(
+        best_by_parent.values(),
+        key=lambda snippet: snippet.score,
+        reverse=True,
+    )
     return [snippet for snippet in ranked[:top_k] if snippet.score > 0.0] or ranked[:1]

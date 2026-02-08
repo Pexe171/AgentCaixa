@@ -131,3 +131,54 @@ def test_rerank_reduces_context_to_top_five() -> None:
     reranked = service._rerank_snippets(query="agente contexto", snippets=snippets)
 
     assert len(reranked) == 5
+
+
+def test_query_translation_fallback_when_gateway_returns_mock_noise() -> None:
+    from rag_app.agent.service import _normalize_translated_query
+
+    original = "E a situação do Zé?"
+    translated = "[MODO MOCK] Estruturei uma resposta completa"
+
+    assert _normalize_translated_query(original, translated) == original
+
+
+def test_agent_service_rewrites_query_for_retrieval() -> None:
+    settings = AppSettings()
+    service = AgentService(settings=settings)
+
+    class FakeGateway:
+        def __init__(self) -> None:
+            self.prompts: list[str] = []
+
+        def generate(
+            self,
+            system_prompt: str,
+            user_prompt: str,
+            tools=None,
+            tool_executor=None,
+        ):
+            del system_prompt, tools, tool_executor
+            self.prompts.append(user_prompt)
+
+            class Output:
+                def __init__(self, text: str) -> None:
+                    self.text = text
+                    self.provider = "mock"
+                    self.model = "mock"
+
+            if "Pergunta original" in user_prompt:
+                return Output(
+                    "Qual é o estado atual do financiamento do cliente José da Silva?"
+                )
+            return Output("Plano e resposta")
+
+    fake_gateway = FakeGateway()
+    service._gateway = fake_gateway  # type: ignore[assignment]
+
+    rewritten = service._rewrite_query_for_retrieval(
+        user_message="E a situação do Zé?",
+        system_prompt="sistema",
+    )
+
+    assert "cliente José da Silva" in rewritten
+    assert any("Pergunta original" in prompt for prompt in fake_gateway.prompts)
