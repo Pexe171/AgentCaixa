@@ -164,7 +164,8 @@ cp .env.example .env
 Configuração local recomendada:
 
 ```bash
-LLM_PROVIDER=mock
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=llama3.2
 VECTOR_PROVIDER=qdrant
 QDRANT_URL=http://localhost:6333
 QDRANT_COLLECTION=rag_app_documents
@@ -253,7 +254,7 @@ curl -X POST http://localhost:8000/v1/agent/chat \
   -d '{
     "user_message": "Me responda usando o modelo local.",
     "llm_provider": "olami",
-    "ollama_model": "llama3.1",
+    "ollama_model": "llama3.2",
     "ollama_base_url": "http://localhost:11434"
   }'
 ```
@@ -356,15 +357,32 @@ streamlit run frontend/chat_app.py
 Abrirá no navegador uma interface com:
 
 - histórico de conversa;
+- seleção de **provedor de LLM** (com Ollama como padrão da interface);
+- campos opcionais de **modelo** e **URL do Ollama** para override por requisição;
 - seleção de tom e profundidade de raciocínio;
 - controle para exigir citações;
-- exibição de diagnóstico (provider, latência e trace_id).
+- exibição de diagnóstico (provider, latência e trace_id);
+- alerta visual quando a resposta vier em **MODO MOCK**.
 
 Você pode trocar o endpoint da API via variável:
 
 ```bash
 export AGENT_API_URL=http://localhost:8000/v1/agent/chat
 ```
+
+
+### 11.3 Por que aparece `[MODO MOCK]` no chat?
+
+Quando OpenAI/Ollama não estão corretamente configurados ou indisponíveis, o serviço faz fallback para o provedor mock.
+
+No setup padrão deste repositório, o `docker-compose.yml` sobe com `LLM_PROVIDER=ollama` e `OLLAMA_MODEL=llama3.2`.
+
+Como resolver:
+
+1. Configure variáveis de ambiente válidas para OpenAI (`OPENAI_API_KEY` + `OPENAI_MODEL`) e use `LLM_PROVIDER=openai`; **ou**
+2. No próprio front-end, selecione `ollama` no campo **Provedor de LLM** e informe `Modelo Ollama` (e opcionalmente `URL do Ollama`).
+
+Assim, a requisição envia `llm_provider` no payload e evita fallback involuntário para mock.
 
 ---
 
