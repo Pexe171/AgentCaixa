@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -20,6 +21,45 @@ class LLMOutput:
 ToolExecutor = Callable[[str, dict[str, Any]], Any]
 
 
+def _request_with_retries(
+    *,
+    client: httpx.Client,
+    url: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    max_attempts: int = 4,
+    initial_backoff_s: float = 0.4,
+) -> dict[str, Any]:
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = client.post(url, headers=headers, json=payload)
+            if response.status_code in {429, 500, 502, 503, 504}:
+                response.raise_for_status()
+            response.raise_for_status()
+            return response.json()
+        except (
+            httpx.TimeoutException,
+            httpx.NetworkError,
+            httpx.HTTPStatusError,
+        ) as exc:
+            should_retry = attempt < max_attempts
+            if isinstance(exc, httpx.HTTPStatusError):
+                status = exc.response.status_code
+                should_retry = should_retry and status in {429, 500, 502, 503, 504}
+            if not should_retry:
+                raise
+
+            backoff_s = initial_backoff_s * (2 ** (attempt - 1))
+            time.sleep(backoff_s)
+            last_error = exc
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Falha inesperada de requisição HTTP.")
+
+
 class OpenAILLMGateway:
     """Cliente mínimo da API da OpenAI usando HTTP."""
 
@@ -30,16 +70,15 @@ class OpenAILLMGateway:
 
     def _send_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         with httpx.Client(timeout=self._timeout_s) as client:
-            response = client.post(
-                "https://api.openai.com/v1/responses",
+            return _request_with_retries(
+                client=client,
+                url="https://api.openai.com/v1/responses",
                 headers={
                     "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
                 },
-                json=payload,
+                payload=payload,
             )
-            response.raise_for_status()
-            return response.json()
 
     def _extract_tool_calls(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         raw_output = data.get("output", [])
@@ -160,13 +199,12 @@ class OllamaLLMGateway:
         }
 
         with httpx.Client(timeout=self._timeout_s) as client:
-            response = client.post(
-                f"{self._base_url}/api/generate",
+            data = _request_with_retries(
+                client=client,
+                url=f"{self._base_url}/api/generate",
                 headers={"Content-Type": "application/json"},
-                json=payload,
+                payload=payload,
             )
-            response.raise_for_status()
-            data = response.json()
 
         answer_text = str(data.get("response", "")).strip()
         if not answer_text:

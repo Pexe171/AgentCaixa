@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import math
+import re
 from dataclasses import dataclass
 from typing import Literal
 
+from rag_app.agent.embedding_cache import EmbeddingCache
 from rag_app.agent.knowledge import DEFAULT_KNOWLEDGE_BASE
 from rag_app.agent.schemas import ContextSnippet
 from rag_app.config import AppSettings
@@ -18,7 +21,17 @@ VectorProvider = Literal["none", "faiss", "qdrant", "pgvector", "weaviate"]
 class _VectorDoc:
     source: str
     content: str
+    parent_content: str
     embedding: list[float]
+
+
+def _split_sentences(text: str) -> list[str]:
+    chunks = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", text)
+        if sentence
+    ]
+    return chunks or [text]
 
 
 def _embed_text(text: str, dimensions: int = 192) -> list[float]:
@@ -52,14 +65,27 @@ class VectorRetriever:
 
     def __init__(self, settings: AppSettings) -> None:
         self._provider: VectorProvider = settings.VECTOR_PROVIDER
-        self._documents = [
-            _VectorDoc(
-                source=item.source,
-                content=item.content,
-                embedding=_embed_text(item.content),
-            )
-            for item in DEFAULT_KNOWLEDGE_BASE
-        ]
+        self._embedding_cache = EmbeddingCache(settings=settings)
+        self._documents: list[_VectorDoc] = []
+        for item in DEFAULT_KNOWLEDGE_BASE:
+            for sentence in _split_sentences(item.content):
+                self._documents.append(
+                    _VectorDoc(
+                        source=item.source,
+                        content=sentence,
+                        parent_content=item.content,
+                        embedding=self._embed_cached(sentence),
+                    )
+                )
+
+    def _embed_cached(self, text: str) -> list[float]:
+        cached = self._embedding_cache.get(text)
+        if cached is not None:
+            return cached
+
+        vector = _embed_text(text)
+        self._embedding_cache.set(text, vector)
+        return vector
 
     def _retrieve_locally(
         self,
@@ -67,30 +93,38 @@ class VectorRetriever:
         top_k: int,
         source_prefix: str,
     ) -> list[ContextSnippet]:
-        query_vector = _embed_text(query)
+        query_vector = self._embed_cached(query)
         ranked = sorted(
             self._documents,
             key=lambda doc: _cosine_similarity(query_vector, doc.embedding),
             reverse=True,
         )
-        snippets = [
-            ContextSnippet(
-                source=f"{source_prefix}:{doc.source}",
-                content=doc.content,
-                score=_cosine_similarity(query_vector, doc.embedding),
-            )
-            for doc in ranked[:top_k]
-        ]
-        return [snippet for snippet in snippets if snippet.score > 0.0]
+
+        merged_by_parent: dict[tuple[str, str], ContextSnippet] = {}
+        for doc in ranked:
+            score = _cosine_similarity(query_vector, doc.embedding)
+            key = (doc.source, doc.parent_content)
+            existing = merged_by_parent.get(key)
+            if existing is None or score > existing.score:
+                merged_by_parent[key] = ContextSnippet(
+                    source=f"{source_prefix}:{doc.source}",
+                    content=doc.parent_content,
+                    score=score,
+                )
+
+        snippets = sorted(
+            merged_by_parent.values(),
+            key=lambda snippet: snippet.score,
+            reverse=True,
+        )
+        return [snippet for snippet in snippets[:top_k] if snippet.score > 0.0]
 
     def retrieve(self, query: str, top_k: int) -> list[ContextSnippet]:
         if self._provider == "none":
             return []
 
         if self._provider == "faiss":
-            try:
-                import faiss  # type: ignore # noqa: F401
-            except ImportError:
+            if importlib.util.find_spec("faiss") is None:
                 return self._retrieve_locally(
                     query=query,
                     top_k=top_k,

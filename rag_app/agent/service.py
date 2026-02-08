@@ -177,6 +177,29 @@ def _extract_selected_indexes(raw_text: str, max_index: int) -> list[int]:
     return valid_indexes[:5]
 
 
+
+
+def _build_query_translation_prompt(user_message: str) -> str:
+    return (
+        "Reescreva a pergunta para busca semântica corporativa, "
+        "removendo ambiguidades, "
+        "expandindo nomes próprios abreviados e preservando intenção. "
+        "Retorne apenas uma única frase em português do Brasil.\n\n"
+        f"Pergunta original: {user_message}"
+    )
+
+
+def _normalize_translated_query(user_message: str, translated: str) -> str:
+    cleaned = translated.strip().replace("\n", " ")
+    if not cleaned:
+        return user_message
+    if len(cleaned) < 12:
+        return user_message
+    if "[modo mock]" in cleaned.lower():
+        return user_message
+    return cleaned
+
+
 def _build_openai_tools() -> list[dict[str, Any]]:
     return [
         {
@@ -310,6 +333,23 @@ class AgentService:
         )
         return plan_output.text
 
+    def _rewrite_query_for_retrieval(
+        self,
+        user_message: str,
+        system_prompt: str,
+    ) -> str:
+        try:
+            translation_output = self._gateway.generate(
+                system_prompt=(
+                    f"{system_prompt} "
+                    "Sua tarefa agora é apenas traduzir a consulta para recuperação."
+                ),
+                user_prompt=_build_query_translation_prompt(user_message),
+            )
+            return _normalize_translated_query(user_message, translation_output.text)
+        except Exception:
+            return user_message
+
     def _rerank_snippets(
         self,
         query: str,
@@ -367,16 +407,24 @@ class AgentService:
                 timestamp=datetime.now(timezone.utc),
             )
 
+        rewritten_query = self._rewrite_query_for_retrieval(
+            user_message=request.user_message,
+            system_prompt=(
+                "Você otimiza consultas para recuperação de conhecimento "
+                "em ambientes financeiros e corporativos."
+            ),
+        )
+
         lexical_snippets = retrieve_context(
-            query=request.user_message,
+            query=rewritten_query,
             top_k=20,
         )
         vector_snippets = self._vector_retriever.retrieve(
-            query=request.user_message,
+            query=rewritten_query,
             top_k=20,
         )
         snippets = self._rerank_snippets(
-            query=request.user_message,
+            query=rewritten_query,
             snippets=_deduplicate_snippets(lexical_snippets + vector_snippets),
         )
 
@@ -393,7 +441,7 @@ class AgentService:
             if self._semantic_memory is not None:
                 semantic_blocks = self._semantic_memory.retrieve_relevant(
                     session_id=request.session_id,
-                    query=request.user_message,
+                    query=rewritten_query,
                     top_k=self._settings.SEMANTIC_MEMORY_RETRIEVE_TOP_K,
                 )
                 if semantic_blocks:

@@ -16,3 +16,30 @@ def test_vector_retriever_faiss_fallback_returns_ranked_context() -> None:
     assert len(results) == 2
     assert all(item.score >= 0 for item in results)
     assert results[0].source.startswith("vector-")
+
+
+def test_vector_retriever_uses_small_to_big_strategy() -> None:
+    retriever = VectorRetriever(settings=AppSettings(VECTOR_PROVIDER="qdrant"))
+
+    results = retriever.retrieve(query="versionamento de prompts", top_k=1)
+
+    assert len(results) == 1
+    assert "OpenAI API" in results[0].content
+    assert "versionamento de prompts" in results[0].content
+
+
+def test_vector_retriever_embedding_cache_reuses_query_embedding() -> None:
+    retriever = VectorRetriever(
+        settings=AppSettings(
+            VECTOR_PROVIDER="qdrant",
+            EMBEDDING_CACHE_BACKEND="memory",
+        )
+    )
+
+    retriever.retrieve(query="latência de produção", top_k=2)
+    first_size = len(retriever._embedding_cache._memory_store)  # type: ignore[attr-defined]
+
+    retriever.retrieve(query="latência de produção", top_k=2)
+    second_size = len(retriever._embedding_cache._memory_store)  # type: ignore[attr-defined]
+
+    assert first_size == second_size

@@ -1,4 +1,6 @@
-from rag_app.agent.llm_gateway import OpenAILLMGateway
+import httpx
+
+from rag_app.agent.llm_gateway import OpenAILLMGateway, _request_with_retries
 
 
 def test_openai_gateway_supports_tool_calling_roundtrip() -> None:
@@ -51,3 +53,52 @@ def test_openai_gateway_supports_tool_calling_roundtrip() -> None:
         "arguments": {"id_cliente": "123"},
     }
     assert sent_payloads[1]["previous_response_id"] == "resp_1"
+
+
+def test_request_with_retries_retries_on_429_and_succeeds() -> None:
+    class FakeResponse:
+        def __init__(self, status_code: int, payload: dict[str, object]) -> None:
+            self.status_code = status_code
+            self._payload = payload
+            self.request = httpx.Request("POST", "https://example.com")
+
+        def raise_for_status(self) -> None:
+            if self.status_code >= 400:
+                raise httpx.HTTPStatusError(
+                    "error",
+                    request=self.request,
+                    response=httpx.Response(self.status_code, request=self.request),
+                )
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def post(
+            self,
+            url: str,
+            headers: dict[str, str],
+            json: dict[str, object],
+        ) -> FakeResponse:
+            del url, headers, json
+            self.calls += 1
+            if self.calls == 1:
+                return FakeResponse(status_code=429, payload={})
+            return FakeResponse(status_code=200, payload={"ok": True})
+
+    client = FakeClient()
+
+    payload = _request_with_retries(
+        client=client,
+        url="https://example.com",
+        headers={"Content-Type": "application/json"},
+        payload={"ping": "pong"},
+        max_attempts=3,
+        initial_backoff_s=0.001,
+    )
+
+    assert payload == {"ok": True}
+    assert client.calls == 2

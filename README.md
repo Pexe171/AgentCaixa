@@ -15,6 +15,8 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
   - `POST /v1/agent/scan`
 - Pipeline de chat com:
   - recuperação híbrida (lexical + vetorial) com reranking real dos 20 melhores candidatos e seleção final dos 5 mais relevantes;
+  - estratégia **Small-to-Big Retrieval**: matching em frases menores com retorno do parágrafo completo para preservar contexto;
+  - **Auto-Query Translation**: reescrita automática da pergunta para melhorar recall semântico na busca;
   - etapa explícita de planejamento (`Plano de Execução`) antes da resposta final;
   - montagem de prompt com tom/profundidade e memória de sessão;
   - geração por `mock`, `openai` ou `ollama`;
@@ -36,6 +38,8 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
 - Orquestração multiagente com roteamento automático para especialistas (`analista_credito`, `especialista_juridico`, `atendimento_geral`).
 - Guardrails de segurança com bloqueio de padrões maliciosos e trilha de auditoria.
 - Observabilidade por resposta com `trace_id` e estimativa de custo por request.
+- Resiliência HTTP com **exponential backoff + retries** para falhas transitórias e rate limits em OpenAI/Ollama.
+- Cache de embeddings com backend em memória (padrão) e opção Redis para reduzir latência/custo em consultas repetidas.
 - Recuperação vetorial avançada com suporte a `faiss` (com fallback local), além de provedores `qdrant`, `pgvector` e `weaviate`.
 - Execução opcional de linters durante scan (`run_linters=true`).
 - Suporte a **Tool Use** na integração OpenAI (`tools`), com execução de funções Python durante a resposta quando o modelo solicitar (ex.: `consultar_caixa(id_cliente)`).
@@ -159,6 +163,43 @@ Exemplo:
 VECTOR_PROVIDER=faiss
 RETRIEVE_TOP_K_DEFAULT=6
 ```
+
+
+## Refinamentos de RAG
+
+### Small-to-Big Retrieval
+
+A recuperação agora ranqueia trechos menores (frases) para aumentar precisão semântica, mas injeta no prompt o **bloco pai completo** (parágrafo/documento) para manter contexto rico na resposta final.
+
+### Auto-Query Translation
+
+Antes da busca lexical/vetorial, o agente executa uma etapa de tradução de consulta para reduzir ambiguidades. Exemplo:
+
+- Entrada do usuário: `E a situação do Zé?`
+- Consulta reescrita: `Qual é o estado atual do financiamento do cliente José da Silva?`
+
+Essa tradução é usada apenas para retrieval/reranking; a pergunta original do usuário permanece no prompt final de resposta.
+
+## Engenharia de produção e observabilidade
+
+### Retries com exponential backoff
+
+As chamadas HTTP para OpenAI e Ollama agora aplicam retentativas automáticas em erros transitórios (`429`, `500`, `502`, `503`, `504`, timeout e falhas de rede), com backoff exponencial.
+
+### Cache de embeddings
+
+O pipeline vetorial usa cache para reutilizar embeddings de textos/perguntas idênticas.
+
+Configuração:
+
+```bash
+EMBEDDING_CACHE_BACKEND=memory   # opções: none | memory | redis
+EMBEDDING_CACHE_REDIS_URL=redis://localhost:6379/0
+EMBEDDING_CACHE_KEY_PREFIX=rag_app:embedding
+EMBEDDING_CACHE_TTL_SECONDS=86400
+```
+
+Se `EMBEDDING_CACHE_BACKEND=redis` e o pacote `redis` não estiver disponível, o sistema usa fallback automático para cache em memória.
 
 ## Execução local
 
