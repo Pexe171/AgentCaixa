@@ -338,3 +338,69 @@ x-webhook-secret: segredo_compartilhado
 ```
 
 > Dica: em ambiente de desenvolvimento local, use túnel (ex.: ngrok/cloudflared) para expor o FastAPI.
+## 14) Observabilidade com Langfuse (trace por etapa)
+
+Agora o agente possui integração opcional com **Langfuse** para rastrear o pipeline completo (traces e spans), incluindo etapas como:
+
+- tradução de query para retrieval;
+- consulta de cache de respostas;
+- recuperação híbrida (lexical + vetorial + reranking);
+- planejamento de execução;
+- geração da resposta final.
+
+### 14.1 Dependência
+
+Instale o extra de observabilidade:
+
+```bash
+pip install -e .[observability]
+```
+
+### 14.2 Configuração
+
+No `.env`:
+
+```bash
+OBSERVABILITY_ENABLED=true
+OBSERVABILITY_PROVIDER=langfuse
+LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_PUBLIC_KEY=seu_public_key
+LANGFUSE_SECRET_KEY=seu_secret_key
+```
+
+Se a integração não estiver configurada, o sistema usa fallback seguro (no-op), sem quebrar o fluxo do agente.
+
+---
+
+## 15) Auto-avaliação contínua em cada deploy
+
+Foi preparada automação para rodar `scripts/evaluate_agent_with_judge.py` em pipeline CI/CD, com proteção contra regressão de qualidade.
+
+### 15.1 Como a regressão é detectada
+
+O script agora suporta:
+
+- `--baseline-path`: referência histórica de qualidade;
+- `--min-media`: nota média mínima obrigatória;
+- `--max-regression`: queda máxima aceitável versus baseline;
+- `--update-baseline`: atualiza baseline após execução bem-sucedida.
+
+Exemplo local:
+
+```bash
+python scripts/evaluate_agent_with_judge.py \
+  --base-url http://localhost:8000 \
+  --judge-provider heuristico \
+  --output-path data/evals/judge_results.json \
+  --baseline-path data/evals/judge_baseline.json \
+  --min-media 6.0 \
+  --max-regression 0.5
+```
+
+### 15.2 Pipeline recomendado
+
+No GitHub Actions (`.github/workflows/evaluate-agent.yml`), a API sobe localmente e executa a avaliação.
+
+- Se `OPENAI_API_KEY` estiver disponível, roda com judge OpenAI.
+- Sem chave, roda com judge heurístico local.
+- O job falha automaticamente quando a qualidade regrede além do limite definido.

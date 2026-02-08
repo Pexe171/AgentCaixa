@@ -13,8 +13,8 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -157,6 +157,20 @@ def julgar_heuristico(
     )
 
 
+def _carregar_media_historica(path: Path) -> float | None:
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+    media = data.get("media")
+    if isinstance(media, (int, float)):
+        return float(media)
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Avaliação LLM-as-a-Judge do agente")
     parser.add_argument("--base-url", default="http://localhost:8000")
@@ -168,6 +182,31 @@ def main() -> None:
     parser.add_argument("--judge-model", default="gpt-4o-mini")
     parser.add_argument("--openai-api-key", default="")
     parser.add_argument("--output-path", default="data/evals/judge_results.json")
+    parser.add_argument(
+        "--baseline-path",
+        default="data/evals/judge_baseline.json",
+        help="Arquivo JSON com avaliação histórica para comparação.",
+    )
+    parser.add_argument(
+        "--min-media",
+        type=float,
+        default=0.0,
+        help="Se > 0, falha a execução quando a média atual ficar abaixo deste valor.",
+    )
+    parser.add_argument(
+        "--max-regression",
+        type=float,
+        default=0.3,
+        help=(
+            "Queda máxima aceitável da média em relação ao baseline. "
+            "Ex.: 0.3 permite cair até 0.3 ponto."
+        ),
+    )
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="Atualiza o baseline com o resultado atual após execução bem-sucedida.",
+    )
     args = parser.parse_args()
 
     resultados: list[dict[str, Any]] = []
@@ -203,6 +242,14 @@ def main() -> None:
         )
 
     media = round(statistics.mean(item["nota"] for item in resultados), 2)
+    baseline_path = Path(args.baseline_path)
+    media_baseline = _carregar_media_historica(baseline_path)
+    regressao = (
+        round(media_baseline - media, 2)
+        if media_baseline is not None
+        else None
+    )
+
     saida = {
         "judge_provider": args.judge_provider,
         "judge_model": (
@@ -211,13 +258,32 @@ def main() -> None:
             else "heuristico-local"
         ),
         "media": media,
+        "media_baseline": media_baseline,
+        "regressao": regressao,
         "resultados": resultados,
     }
+
     serialized = json.dumps(saida, ensure_ascii=False, indent=2)
     output_path = Path(args.output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(serialized + "\n", encoding="utf-8")
     print(serialized)
+
+    if args.min_media > 0 and media < args.min_media:
+        raise SystemExit(
+            f"Falha de qualidade: média {media} abaixo do mínimo {args.min_media}."
+        )
+
+    if regressao is not None and regressao > args.max_regression:
+        raise SystemExit(
+            "Falha de qualidade: regressão acima do limite. "
+            f"Média atual={media}; baseline={media_baseline}; "
+            f"limite={args.max_regression}."
+        )
+
+    if args.update_baseline:
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        baseline_path.write_text(serialized + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

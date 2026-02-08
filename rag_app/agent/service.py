@@ -10,6 +10,11 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from rag_app.agent.guardrails import append_audit_event, validate_user_message
+from rag_app.agent.image_vector_analysis import (
+    ImageAnalysisError,
+    compare_images,
+    extract_image_vector,
+)
 from rag_app.agent.knowledge import retrieve_context
 from rag_app.agent.llm_gateway import (
     LLMOutput,
@@ -18,11 +23,7 @@ from rag_app.agent.llm_gateway import (
     OpenAILLMGateway,
     ToolExecutor,
 )
-from rag_app.agent.image_vector_analysis import (
-    ImageAnalysisError,
-    compare_images,
-    extract_image_vector,
-)
+from rag_app.agent.observability import AgentTracer
 from rag_app.agent.orchestration import route_to_specialist, specialist_instruction
 from rag_app.agent.response_cache import ResponseCache
 from rag_app.agent.scanner import scan_folder
@@ -305,6 +306,7 @@ class AgentService:
         self._semantic_memory = _resolve_semantic_memory(settings)
         self._vector_retriever = VectorRetriever(settings=settings)
         self._response_cache = ResponseCache(settings=settings)
+        self._tracer = AgentTracer(settings=settings)
 
     def _maybe_persist_semantic_memory(self, session_id: str) -> None:
         if self._semantic_memory is None:
@@ -392,6 +394,21 @@ class AgentService:
     def chat(self, request: AgentChatRequest) -> AgentChatResponse:
         start = time.perf_counter()
         trace_id = str(uuid4())
+        trace = self._tracer.start_trace(
+            name="agent_chat_pipeline",
+            trace_id=trace_id,
+            session_id=request.session_id,
+            input_data={
+                "user_message": request.user_message,
+                "tone": request.tone,
+                "reasoning_depth": request.reasoning_depth,
+                "require_citations": request.require_citations,
+            },
+            metadata={
+                "llm_provider": self._settings.LLM_PROVIDER,
+                "vector_provider": self._settings.VECTOR_PROVIDER,
+            },
+        )
 
         previous_messages = (
             self._memory.get_recent(request.session_id) if request.session_id else []
@@ -422,13 +439,15 @@ class AgentService:
                 timestamp=datetime.now(timezone.utc),
             )
 
-        rewritten_query = self._rewrite_query_for_retrieval(
-            user_message=request.user_message,
-            system_prompt=(
-                "Você otimiza consultas para recuperação de conhecimento "
-                "em ambientes financeiros e corporativos."
-            ),
-        )
+        with trace.span("query_translation", input_data=request.user_message) as span:
+            rewritten_query = self._rewrite_query_for_retrieval(
+                user_message=request.user_message,
+                system_prompt=(
+                    "Você otimiza consultas para recuperação de conhecimento "
+                    "em ambientes financeiros e corporativos."
+                ),
+            )
+            span.update(output=rewritten_query)
 
         cache_input: dict[str, str | bool] = {
             "query": rewritten_query,
@@ -437,7 +456,11 @@ class AgentService:
             "require_citations": request.require_citations,
             "specialist": route_to_specialist(request.user_message).specialist,
         }
-        cached_answer = self._response_cache.get(cache_input)
+        with trace.span("response_cache_lookup", input_data=cache_input) as span:
+            cached_answer = self._response_cache.get(cache_input)
+            span.update(
+                output={"cache_hit": cached_answer is not None},
+            )
         if cached_answer is not None:
             diagnostics = AgentDiagnostics(
                 provider_used="response-cache",
@@ -457,18 +480,29 @@ class AgentService:
                 timestamp=datetime.now(timezone.utc),
             )
 
-        lexical_snippets = retrieve_context(
-            query=rewritten_query,
-            top_k=20,
-        )
-        vector_snippets = self._vector_retriever.retrieve(
-            query=rewritten_query,
-            top_k=20,
-        )
-        snippets = self._rerank_snippets(
-            query=rewritten_query,
-            snippets=_deduplicate_snippets(lexical_snippets + vector_snippets),
-        )
+        with trace.span(
+            "retrieval_hibrido",
+            input_data={"query": rewritten_query},
+        ) as span:
+            lexical_snippets = retrieve_context(
+                query=rewritten_query,
+                top_k=20,
+            )
+            vector_snippets = self._vector_retriever.retrieve(
+                query=rewritten_query,
+                top_k=20,
+            )
+            snippets = self._rerank_snippets(
+                query=rewritten_query,
+                snippets=_deduplicate_snippets(lexical_snippets + vector_snippets),
+            )
+            span.update(
+                output={
+                    "lexical_count": len(lexical_snippets),
+                    "vector_count": len(vector_snippets),
+                    "selected_count": len(snippets),
+                }
+            )
 
         context_blocks = [
             "- Fonte: "
@@ -500,11 +534,13 @@ class AgentService:
             require_citations=request.require_citations,
             specialist=routing.specialist,
         )
-        execution_plan = self._build_execution_plan(
-            user_message=request.user_message,
-            memory_blocks=memory_blocks,
-            system_prompt=system_prompt,
-        )
+        with trace.span("execution_planning") as span:
+            execution_plan = self._build_execution_plan(
+                user_message=request.user_message,
+                memory_blocks=memory_blocks,
+                system_prompt=system_prompt,
+            )
+            span.update(output=execution_plan)
         user_prompt = _build_user_prompt(
             user_message=request.user_message,
             execution_plan=execution_plan,
@@ -512,12 +548,26 @@ class AgentService:
             memory_blocks=memory_blocks,
         )
 
-        llm_output = self._gateway.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            tools=_build_openai_tools(),
-            tool_executor=_build_tool_executor(context_blocks=context_blocks),
-        )
+        with trace.span(
+            "response_generation",
+            input_data={
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+            },
+        ) as span:
+            llm_output = self._gateway.generate(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                tools=_build_openai_tools(),
+                tool_executor=_build_tool_executor(context_blocks=context_blocks),
+            )
+            span.update(
+                output={
+                    "provider": llm_output.provider,
+                    "model": llm_output.model,
+                    "answer_preview": llm_output.text[:500],
+                }
+            )
         self._response_cache.set(cache_input=cache_input, answer=llm_output.text)
 
         if request.session_id:
@@ -543,6 +593,15 @@ class AgentService:
             event="chat_completed",
             trace_id=trace_id,
         )
+
+        trace.update(
+            output={
+                "answer_preview": llm_output.text[:600],
+                "citations_count": len(snippets),
+                "diagnostics": diagnostics.model_dump(),
+            },
+        )
+        self._tracer.flush()
 
         return AgentChatResponse(
             answer=llm_output.text,
