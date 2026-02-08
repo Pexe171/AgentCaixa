@@ -384,7 +384,13 @@ class AgentService:
         start = time.perf_counter()
         trace_id = str(uuid4())
 
-        allowed, security_message = validate_user_message(request.user_message)
+        previous_messages = (
+            self._memory.get_recent(request.session_id) if request.session_id else []
+        )
+        allowed, security_message = validate_user_message(
+            request.user_message,
+            previous_messages=previous_messages,
+        )
         if not allowed:
             append_audit_event(
                 audit_file=self._settings.AUDIT_LOG_PATH,

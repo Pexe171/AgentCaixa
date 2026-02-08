@@ -103,3 +103,17 @@ def test_agent_chat_stream_returns_sse_events() -> None:
     assert "event: status" in body
     assert "event: delta" in body
     assert "event: done" in body
+
+
+def test_admin_metrics_and_dashboard_endpoints() -> None:
+    client = TestClient(app)
+
+    metrics_response = client.get("/admin/metrics")
+    assert metrics_response.status_code == 200
+    metrics = metrics_response.json()
+    assert "total_eventos" in metrics
+    assert "judge_media" in metrics
+
+    dashboard_response = client.get("/admin/dashboard")
+    assert dashboard_response.status_code == 200
+    assert "Monitorização do Agente" in dashboard_response.text

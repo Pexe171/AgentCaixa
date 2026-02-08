@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 
@@ -166,6 +167,7 @@ def main() -> None:
     )
     parser.add_argument("--judge-model", default="gpt-4o-mini")
     parser.add_argument("--openai-api-key", default="")
+    parser.add_argument("--output-path", default="data/evals/judge_results.json")
     args = parser.parse_args()
 
     resultados: list[dict[str, Any]] = []
@@ -211,7 +213,11 @@ def main() -> None:
         "media": media,
         "resultados": resultados,
     }
-    print(json.dumps(saida, ensure_ascii=False, indent=2))
+    serialized = json.dumps(saida, ensure_ascii=False, indent=2)
+    output_path = Path(args.output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(serialized + "\n", encoding="utf-8")
+    print(serialized)
 
 
 if __name__ == "__main__":
