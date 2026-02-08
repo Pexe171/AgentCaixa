@@ -25,9 +25,14 @@ class AppSettings(BaseSettings):
     HYBRID_ALPHA: float = 0.65
     STRICT_MIN_SCORE: float = 0.20
     ENABLE_DECOMPOSITION: bool = True
-    LLM_PROVIDER: Literal["mock", "openai"] = "mock"
+    LLM_PROVIDER: Literal["mock", "openai", "ollama"] = "mock"
     OPENAI_MODEL: str | None = None
     OPENAI_API_KEY: str | None = Field(default=None, repr=False)
+    OPENAI_TIMEOUT_SECONDS: float = 20.0
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str | None = None
+    OLLAMA_TIMEOUT_SECONDS: float = 30.0
+    AGENT_NAME: str = "HAG-PTBR"
 
     @field_validator("HYBRID_ALPHA")
     def _validate_hybrid_alpha(cls, value: float) -> float:
@@ -39,6 +44,12 @@ class AppSettings(BaseSettings):
     def _validate_min_score(cls, value: float) -> float:
         if not 0.0 <= value <= 1.0:
             raise ValueError("STRICT_MIN_SCORE must be between 0 and 1.")
+        return value
+
+    @field_validator("OPENAI_TIMEOUT_SECONDS", "OLLAMA_TIMEOUT_SECONDS")
+    def _validate_provider_timeout(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("Provider timeout must be greater than 0.")
         return value
 
 
