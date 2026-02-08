@@ -21,6 +21,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+rag = [
+  "redis",
+  "qdrant-client",
+]
+
 dev = [
   "pytest",
   "ruff",

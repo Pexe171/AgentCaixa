@@ -1,361 +1,257 @@
-# rag_app
+# AgentCaixa (rag_app)
 
-Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com foco em:
+Aplicação em **Python 3.11+** para execução de um agente conversacional com arquitetura RAG (retrieval augmented generation), memória de sessão, memória semântica e camadas de observabilidade.
 
-- chat inteligente com contexto;
-- execução via OpenAI API ou **Ollama local**;
-- varredura de pastas inteiras para análise de código, busca de riscos e apoio a debug.
+> Este README foi reescrito do zero para deixar o projeto claro, prático e focado em uso local.
 
-## O que está implementado
+---
 
-- API FastAPI com:
-  - `GET /health`
-  - `POST /v1/agent/chat`
-  - `POST /v1/agent/chat/stream` (SSE)
-  - `POST /v1/agent/image/analyze` (análise vetorial de imagem local)
-  - `POST /v1/agent/scan`
-- Pipeline de chat com:
-  - recuperação híbrida (lexical + vetorial) com reranking real dos 20 melhores candidatos e seleção final dos 5 mais relevantes;
-  - estratégia **Small-to-Big Retrieval**: matching em frases menores com retorno do parágrafo completo para preservar contexto;
-  - **Auto-Query Translation**: reescrita automática da pergunta para melhorar recall semântico na busca;
-  - etapa explícita de planejamento (`Plano de Execução`) antes da resposta final;
-  - montagem de prompt com tom/profundidade e memória de sessão;
-  - geração por `mock`, `openai` ou `ollama`;
-  - diagnósticos (latência, modelo, fallback);
-  - endpoint de streaming em tempo real via SSE para reduzir percepção de latência.
-- Scanner multi-linguagem de pasta para identificar problemas comuns:
-  - possível segredo hardcoded;
-  - logs de debug residuais;
-  - tratamento de erro frágil;
-  - código comentado suspeito;
-  - TODO/FIXME pendente.
-- CLI com comandos:
-  - `ingest` (documentos)
-  - `scan` (varredura local de código)
-- Testes automatizados para API, serviço, scanner e configuração.
-- Memória por sessão (`session_id`) para continuidade de contexto em múltiplas mensagens.
-- Persistência de memória em banco SQLite (configurável) para manter histórico entre reinicializações.
-- Memória semântica de longo prazo com sumarização periódica e recuperação vetorial por sessão.
-- Orquestração multiagente com roteamento automático para especialistas (`analista_credito`, `especialista_juridico`, `atendimento_geral`).
-- Guardrails de segurança com bloqueio de padrões maliciosos, detecção de PII/exfiltração e mudanças drásticas de comportamento com contexto de sessão.
-- Observabilidade por resposta com `trace_id` e estimativa de custo por request.
-- Resiliência HTTP com **exponential backoff + retries** para falhas transitórias e rate limits em OpenAI/Ollama.
-- Cache de embeddings com backend em memória (padrão) e opção Redis para reduzir latência/custo em consultas repetidas.
-- Recuperação vetorial avançada com suporte a `faiss` (com fallback local), além de provedores `qdrant`, `pgvector` e `weaviate`.
-- Execução opcional de linters durante scan (`run_linters=true`).
-- Suporte a **Tool Use** na integração OpenAI (`tools`), com execução de funções Python durante a resposta quando o modelo solicitar (ex.: `consultar_caixa(id_cliente)`).
-- Dashboard administrativo em `/admin/dashboard` para acompanhar eventos de auditoria e notas do judge em tempo real.
-- Parser DOCX com suporte a blocos de imagem via OCR (quando `pillow` + `pytesseract` estiverem instalados).
+## 1) Objetivo do projeto
 
-## Arquitetura resumida
+O AgentCaixa foi desenhado para:
 
-### 1) Fluxo de chat (`/v1/agent/chat`)
+- receber perguntas em linguagem natural;
+- recuperar contexto relevante (busca lexical + vetorial);
+- gerar resposta estruturada em português do Brasil;
+- manter memória de interações da sessão;
+- reduzir custo com cache de embeddings e cache de respostas repetidas;
+- oferecer trilha de auditoria e métricas administrativas.
 
-1. Recebe `AgentChatRequest`.
-2. Recupera até 20 snippets lexicais + 20 vetoriais.
-3. Deduplica resultados e aplica reranking para escolher os 5 melhores contextos.
-4. Gera um Plano de Execução com o LLM antes da resposta final.
-5. Monta prompts sistêmico + usuário com plano + contexto final.
-6. Resolve provedor:
-   - `openai` quando chave/modelo estiverem configurados;
-   - `ollama` quando modelo local estiver configurado;
-   - fallback para `mock` nos demais casos.
-7. Retorna resposta com citações e diagnósticos.
+---
 
-### 2) Fluxo de análise de pasta (`/v1/agent/scan`)
+## 2) Pinecone é pago? Preciso usar?
 
-1. Recebe caminho da pasta (`folder_path`).
-2. Percorre arquivos suportados por extensão.
-3. Executa regras simples de análise linha a linha.
-4. Consolida relatório com issues + resumo executivo.
+### Resposta curta
 
+- **Sim**, o Pinecone é um serviço gerenciado (cloud) e normalmente envolve plano pago conforme uso.
+- **Não**, você **não precisa** usar Pinecone para rodar este projeto.
 
-## Análise vetorial de imagem (nativa, sem API externa)
+### Caminho recomendado para você (100% local)
 
-O agente agora suporta análise de dados em imagem com pipeline local para cenários de ciência de dados e IA full stack:
+Para rodar tudo localmente, use:
 
-- leitura local da imagem (`image_path`);
-- extração de vetor denso com histogramas de brilho, bordas e canais RGB;
-- métricas quantitativas: média/desvio de brilho, densidade de bordas e entropia;
-- paleta dominante de cores;
-- comparação opcional entre imagem alvo e referência por similaridade vetorial (cosseno).
+- **Qdrant** como banco vetorial local (via Docker);
+- **Redis** para cache local (via Docker);
+- `VECTOR_PROVIDER=qdrant`;
+- sem chave de API de Pinecone.
 
-Endpoint:
+Ou seja: dá para rodar localmente sem custo de Pinecone.
 
-- `POST /v1/agent/image/analyze`
+---
 
-Payload exemplo:
+## 3) Arquitetura funcional
 
-```json
-{
-  "image_path": "/dados/imagens/documento.png",
-  "reference_image_path": "/dados/imagens/base.png"
-}
-```
+### 3.1 Pipeline de chat
 
-Resposta inclui `vector_dimensions`, `vector_preview`, `top_palette` e `similarity_score` (quando houver referência).
+1. Recebe requisição do usuário (`/v1/agent/chat`).
+2. Aplica guardrails de segurança.
+3. Reescreve a pergunta para busca (query translation).
+4. Tenta cache de resposta completa (se habilitado).
+5. Faz recuperação híbrida:
+   - lexical;
+   - vetorial (Qdrant/FAISS/fallback local, conforme configuração).
+6. Reranqueia snippets.
+7. Constrói plano de execução.
+8. Gera resposta no provedor LLM configurado.
+9. Persiste memória de sessão e memória semântica (quando aplicável).
+10. Retorna resposta, citações e diagnósticos.
 
+### 3.2 Camada vetorial
 
-## Configuração (`.env`)
+Provedores suportados:
 
-### Modo mock (desenvolvimento rápido)
+- `none`: desativa busca vetorial.
+- `faiss`: usa FAISS quando instalado; fallback local quando não disponível.
+- `qdrant`: integração real com Qdrant.
+- `pinecone`: integração com Pinecone (cloud, opcional).
+- `pgvector` e `weaviate`: modo compatível com fallback local atual.
+
+### 3.3 Cache
+
+- **Cache de embeddings**: evita recomputar embeddings iguais.
+- **Cache de respostas completas**: devolve resposta pronta para perguntas repetidas.
+
+Backends disponíveis para ambos:
+
+- `none`
+- `memory`
+- `redis`
+
+---
+
+## 4) Requisitos
+
+- Python 3.11+
+- pip
+- Docker + Docker Compose (recomendado para infraestrutura local)
+
+---
+
+## 5) Infraestrutura local (recomendada)
+
+O repositório inclui `docker-compose.infra.yml` com:
+
+- `qdrant` (porta 6333)
+- `redis` (porta 6379)
+
+Subir infraestrutura:
 
 ```bash
-PROJECT_NAME=rag_app
-LLM_PROVIDER=mock
-RETRIEVE_TOP_K_DEFAULT=6
-VECTOR_PROVIDER=none
-SESSION_STORE_BACKEND=memory
-SESSION_DB_PATH=data/memory/session_memory.db
-ENABLE_LINTER_SCAN=false
-AUDIT_LOG_PATH=data/audit/agent_audit.log
-COST_PER_1K_TOKENS_USD=0.002
-JUDGE_RESULTS_PATH=data/evals/judge_results.json
+docker compose -f docker-compose.infra.yml up -d
 ```
 
-### Modo OpenAI
+Parar infraestrutura:
 
 ```bash
-PROJECT_NAME=rag_app
-LLM_PROVIDER=openai
-OPENAI_MODEL=gpt-4.1-mini
-OPENAI_API_KEY=<SUA_CHAVE_OPENAI>
-OPENAI_TIMEOUT_SECONDS=20
+docker compose -f docker-compose.infra.yml down
 ```
 
-### Tool Use (OpenAI)
+---
 
-O gateway OpenAI agora aceita o campo `tools` da API `/v1/responses` e executa o ciclo de tool calling:
+## 6) Instalação da aplicação
 
-1. modelo recebe as funções disponíveis;
-2. se houver `function_call`, o backend executa a função Python;
-3. o resultado volta como `function_call_output`;
-4. o modelo gera a resposta final com base no retorno da ferramenta.
-
-No fluxo de chat, a função `consultar_caixa` é disponibilizada para permitir consultas por `id_cliente`.
-
-
-### Modo Ollama (local)
-
-```bash
-PROJECT_NAME=rag_app
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1:8b
-OLLAMA_TIMEOUT_SECONDS=30
-```
-
-
-## Persistência de memória de conversa
-
-Por padrão, a memória de sessão roda em `memory` (somente processo atual).
-Para persistência real entre reinícios da API, ative SQLite:
-
-```bash
-SESSION_STORE_BACKEND=sqlite
-SESSION_DB_PATH=data/memory/session_memory.db
-```
-
-## Memória semântica de longo prazo
-
-Além da janela curta de sessão, o agente agora cria resumos periódicos do diálogo e salva em SQLite com embedding vetorial para recall futuro.
-
-```bash
-SEMANTIC_MEMORY_BACKEND=sqlite
-SEMANTIC_MEMORY_DB_PATH=data/memory/semantic_memory.db
-SEMANTIC_MEMORY_RETRIEVE_TOP_K=3
-SEMANTIC_MEMORY_SUMMARY_INTERVAL=4
-```
-
-- `SEMANTIC_MEMORY_SUMMARY_INTERVAL`: a cada N mensagens na sessão, um resumo factual é persistido.
-- `SEMANTIC_MEMORY_RETRIEVE_TOP_K`: quantidade de memórias semânticas recuperadas e reinjetadas no prompt.
-
-## Multi-Agent Systems (orquestração por domínio)
-
-O pipeline agora possui um orquestrador leve por regras para escolher o especialista mais adequado antes de chamar o LLM:
-
-- `analista_credito`: ativa quando a pergunta contém indícios de crédito, score, limite, financiamento e risco.
-- `especialista_juridico`: ativa para termos contratuais, regulatórios, LGPD e compliance.
-- `atendimento_geral`: fallback para demais temas.
-
-O especialista roteado é exposto em `diagnostics.routed_specialist` e a justificativa em `diagnostics.routing_reason`.
-
-## RAG vetorial avançado
-
-O projeto agora possui recuperação vetorial com embeddings densos determinísticos e ranqueamento por similaridade de cosseno:
-
-- `VECTOR_PROVIDER=faiss`: usa pipeline compatível com FAISS; se o pacote não estiver instalado, aplica fallback local automático com a mesma estratégia vetorial.
-- `VECTOR_PROVIDER=qdrant`: usa pipeline vetorial local compatível para facilitar migração para Qdrant.
-- `VECTOR_PROVIDER=none`: desativa camada vetorial.
-
-Exemplo:
-
-```bash
-VECTOR_PROVIDER=faiss
-RETRIEVE_TOP_K_DEFAULT=6
-```
-
-
-## Refinamentos de RAG
-
-### Small-to-Big Retrieval
-
-A recuperação agora ranqueia trechos menores (frases) para aumentar precisão semântica, mas injeta no prompt o **bloco pai completo** (parágrafo/documento) para manter contexto rico na resposta final.
-
-### Auto-Query Translation
-
-Antes da busca lexical/vetorial, o agente executa uma etapa de tradução de consulta para reduzir ambiguidades. Exemplo:
-
-- Entrada do usuário: `E a situação do Zé?`
-- Consulta reescrita: `Qual é o estado atual do financiamento do cliente José da Silva?`
-
-Essa tradução é usada apenas para retrieval/reranking; a pergunta original do usuário permanece no prompt final de resposta.
-
-## Engenharia de produção e observabilidade
-
-### Retries com exponential backoff
-
-As chamadas HTTP para OpenAI e Ollama agora aplicam retentativas automáticas em erros transitórios (`429`, `500`, `502`, `503`, `504`, timeout e falhas de rede), com backoff exponencial.
-
-### Cache de embeddings
-
-O pipeline vetorial usa cache para reutilizar embeddings de textos/perguntas idênticas.
-
-Configuração:
-
-```bash
-EMBEDDING_CACHE_BACKEND=memory   # opções: none | memory | redis
-EMBEDDING_CACHE_REDIS_URL=redis://localhost:6379/0
-EMBEDDING_CACHE_KEY_PREFIX=rag_app:embedding
-EMBEDDING_CACHE_TTL_SECONDS=86400
-```
-
-Se `EMBEDDING_CACHE_BACKEND=redis` e o pacote `redis` não estiver disponível, o sistema usa fallback automático para cache em memória.
-
-
-## Dashboard administrativo e integração de avaliação
-
-A API expõe:
-
-- `GET /admin/metrics`: retorna métricas agregadas de auditoria e avaliação do judge.
-- `GET /admin/dashboard`: interface HTML simples para monitorização gráfica em tempo real.
-
-O dashboard lê:
-
-- `AUDIT_LOG_PATH` (trilha de auditoria do agente);
-- `JUDGE_RESULTS_PATH` (saída JSON da avaliação do judge).
-
-Para gerar o arquivo do judge:
-
-```bash
-python scripts/evaluate_agent_with_judge.py --output-path data/evals/judge_results.json
-```
-
-## OCR em documentos DOCX
-
-O parser `rag_app/ingest/parser_docx.py` agora extrai texto de imagens incorporadas no DOCX (blocos `type="image"`).
-
-Dependências opcionais:
-
-```bash
-pip install pillow pytesseract
-```
-
-> Observação: para OCR real também é necessário o binário do Tesseract instalado no sistema operacional.
-
-## Execução local
+### 6.1 Criar ambiente virtual
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev]
+```
+
+### 6.2 Instalar dependências
+
+Para uso local com Qdrant + Redis:
+
+```bash
+pip install -e .[dev,rag]
+```
+
+> O extra `rag` foi mantido focado no stack local (Redis + Qdrant).
+
+Se você quiser testar Pinecone, instale manualmente:
+
+```bash
+pip install pinecone
+```
+
+---
+
+## 7) Configuração de ambiente
+
+Copie `.env.example` para `.env` e ajuste os valores:
+
+```bash
+cp .env.example .env
+```
+
+Configuração local recomendada:
+
+```bash
+LLM_PROVIDER=mock
+VECTOR_PROVIDER=qdrant
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=rag_app_documents
+
+EMBEDDING_CACHE_BACKEND=redis
+EMBEDDING_CACHE_REDIS_URL=redis://localhost:6379/0
+
+RESPONSE_CACHE_BACKEND=redis
+RESPONSE_CACHE_REDIS_URL=redis://localhost:6379/1
+```
+
+---
+
+## 8) Como executar
+
+### 8.1 API
+
+```bash
 uvicorn rag_app.api.main:app --reload
 ```
 
-## Exemplos de uso da API
-
-### Health
+### 8.2 Healthcheck
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-### Chat
+### 8.3 Chat
 
 ```bash
 curl -X POST http://localhost:8000/v1/agent/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "user_message": "Quero um plano completo para construir um agente de IA.",
+    "user_message": "Quero um plano para reduzir latência no meu agente.",
     "tone": "didatico",
     "reasoning_depth": "profundo",
     "require_citations": true
   }'
 ```
 
+---
 
-### Chat com streaming (SSE)
+## 9) Como funciona a parte vetorial na prática
 
-```bash
-curl -N -X POST http://localhost:8000/v1/agent/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_message": "Quero um plano completo para construir um agente de IA.",
-    "tone": "didatico",
-    "reasoning_depth": "profundo",
-    "require_citations": true
-  }'
-```
+### 9.1 Qdrant local (sem custo adicional de cloud)
 
-O stream envia eventos `status`, `delta` e `done` no formato `text/event-stream`.
+Com `VECTOR_PROVIDER=qdrant`, o serviço:
 
-### Scan de pasta para debug
+- conecta no Qdrant local;
+- sincroniza documentos da base interna;
+- executa busca vetorial por similaridade;
+- aplica fallback local se Qdrant indisponível.
 
-```bash
-curl -X POST http://localhost:8000/v1/agent/scan \
-  -H "Content-Type: application/json" \
-  -d '{
-    "folder_path": "/workspace/AgentCaixa",
-    "include_hidden": false,
-    "max_files": 500,
-    "run_linters": true
-  }'
-```
+### 9.2 Pinecone (opcional cloud)
 
-## Uso via CLI
+Com `VECTOR_PROVIDER=pinecone`, o serviço tenta usar Pinecone.
 
-### Varredura local
+Para isso você precisa:
 
-```bash
-python -m rag_app.cli scan --folder /workspace/AgentCaixa --max-files 500
-```
+- instalar SDK (`pip install pinecone`);
+- informar `PINECONE_API_KEY`;
+- ter índice criado no ambiente Pinecone.
 
+Se não houver SDK/chave/disponibilidade, o serviço faz fallback local.
 
-## Avaliação de respostas (LLM-as-a-Judge)
+---
 
-Foi adicionado o script `scripts/evaluate_agent_with_judge.py` para medir qualidade das respostas do agente em casos padrão.
+## 10) Cache de respostas: economia de tokens
 
-### Modo heurístico local (sem API externa)
+Quando `RESPONSE_CACHE_BACKEND` está ativo, perguntas repetidas retornam do cache.
 
-```bash
-python scripts/evaluate_agent_with_judge.py --base-url http://localhost:8000
-```
+Efeito esperado:
 
-### Modo OpenAI (juiz externo)
+- menor latência;
+- menor uso de tokens no LLM;
+- `diagnostics.provider_used` = `response-cache` em hit de cache.
+
+---
+
+## 11) Testes
+
+Executar suíte:
 
 ```bash
-python scripts/evaluate_agent_with_judge.py \
-  --base-url http://localhost:8000 \
-  --judge-provider openai \
-  --judge-model gpt-4o-mini \
-  --openai-api-key "$OPENAI_API_KEY"
-```
-
-A saída é um JSON com nota por caso (1 a 10), justificativa e média consolidada.
-
-## Testes
-
-```bash
-ruff check .
 pytest -q
 ```
+
+---
+
+## 12) Estrutura principal
+
+- `rag_app/agent/service.py`: orquestração principal do chat.
+- `rag_app/agent/vector_index.py`: retrieval vetorial e fallback.
+- `rag_app/agent/embedding_cache.py`: cache de embeddings.
+- `rag_app/agent/response_cache.py`: cache de respostas completas.
+- `rag_app/config.py`: configuração central via variáveis de ambiente.
+- `docker-compose.infra.yml`: infraestrutura local (Qdrant + Redis).
+
+---
+
+## 13) Resumo de decisão arquitetural
+
+Para seu cenário (rodar no computador e evitar custo cloud):
+
+- ✅ Use **Qdrant local** + **Redis local**.
+- ✅ Mantenha Pinecone desabilitado.
+- ✅ Ative cache de embeddings e respostas para reduzir custo de inferência.
+

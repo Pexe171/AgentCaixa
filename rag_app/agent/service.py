@@ -24,6 +24,7 @@ from rag_app.agent.image_vector_analysis import (
     extract_image_vector,
 )
 from rag_app.agent.orchestration import route_to_specialist, specialist_instruction
+from rag_app.agent.response_cache import ResponseCache
 from rag_app.agent.scanner import scan_folder
 from rag_app.agent.schemas import (
     AgentChatRequest,
@@ -303,6 +304,7 @@ class AgentService:
         self._memory = _resolve_session_memory(settings)
         self._semantic_memory = _resolve_semantic_memory(settings)
         self._vector_retriever = VectorRetriever(settings=settings)
+        self._response_cache = ResponseCache(settings=settings)
 
     def _maybe_persist_semantic_memory(self, session_id: str) -> None:
         if self._semantic_memory is None:
@@ -428,6 +430,33 @@ class AgentService:
             ),
         )
 
+        cache_input: dict[str, str | bool] = {
+            "query": rewritten_query,
+            "tone": request.tone,
+            "depth": request.reasoning_depth,
+            "require_citations": request.require_citations,
+            "specialist": route_to_specialist(request.user_message).specialist,
+        }
+        cached_answer = self._response_cache.get(cache_input)
+        if cached_answer is not None:
+            diagnostics = AgentDiagnostics(
+                provider_used="response-cache",
+                model="cache",
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                retrieved_context_count=0,
+                fallback_used=False,
+                trace_id=trace_id,
+                estimated_cost_usd=0.0,
+                routed_specialist=cache_input["specialist"],
+                routing_reason="Resposta retornada do cache de respostas.",
+            )
+            return AgentChatResponse(
+                answer=cached_answer,
+                citations=[],
+                diagnostics=diagnostics,
+                timestamp=datetime.now(timezone.utc),
+            )
+
         lexical_snippets = retrieve_context(
             query=rewritten_query,
             top_k=20,
@@ -489,6 +518,7 @@ class AgentService:
             tools=_build_openai_tools(),
             tool_executor=_build_tool_executor(context_blocks=context_blocks),
         )
+        self._response_cache.set(cache_input=cache_input, answer=llm_output.text)
 
         if request.session_id:
             self._memory.append(request.session_id, "usuario", request.user_message)

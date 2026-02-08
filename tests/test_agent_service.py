@@ -217,3 +217,19 @@ def test_agent_guardrail_blocks_behavior_shift_with_session_context() -> None:
 
     assert blocked.diagnostics.provider_used == "guardrail"
     assert any(token in blocked.answer.lower() for token in ("comportamental", "privacidade"))
+
+
+def test_agent_service_retorna_cache_de_resposta_em_pergunta_repetida() -> None:
+    settings = AppSettings(RESPONSE_CACHE_BACKEND="memory")
+    service = AgentService(settings=settings)
+
+    first = service.chat(
+        AgentChatRequest(user_message="Explique estratégia para reduzir latência.")
+    )
+    second = service.chat(
+        AgentChatRequest(user_message="Explique estratégia para reduzir latência.")
+    )
+
+    assert first.answer
+    assert second.answer == first.answer
+    assert second.diagnostics.provider_used == "response-cache"

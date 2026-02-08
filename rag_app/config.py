@@ -33,11 +33,28 @@ class AppSettings(BaseSettings):
     OLLAMA_MODEL: str | None = None
     OLLAMA_TIMEOUT_SECONDS: float = 30.0
     AGENT_NAME: str = "HAG-PTBR"
-    VECTOR_PROVIDER: Literal["none", "faiss", "qdrant", "pgvector", "weaviate"] = "none"
+    VECTOR_PROVIDER: Literal[
+        "none",
+        "faiss",
+        "qdrant",
+        "pinecone",
+        "pgvector",
+        "weaviate",
+    ] = "none"
+    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: str | None = Field(default=None, repr=False)
+    QDRANT_COLLECTION: str = "rag_app_documents"
+    PINECONE_API_KEY: str | None = Field(default=None, repr=False)
+    PINECONE_INDEX: str = "rag-app-index"
+    PINECONE_NAMESPACE: str = "default"
     EMBEDDING_CACHE_BACKEND: Literal["none", "memory", "redis"] = "memory"
     EMBEDDING_CACHE_REDIS_URL: str = "redis://localhost:6379/0"
     EMBEDDING_CACHE_KEY_PREFIX: str = "rag_app:embedding"
     EMBEDDING_CACHE_TTL_SECONDS: int = 86400
+    RESPONSE_CACHE_BACKEND: Literal["none", "memory", "redis"] = "memory"
+    RESPONSE_CACHE_REDIS_URL: str = "redis://localhost:6379/1"
+    RESPONSE_CACHE_KEY_PREFIX: str = "rag_app:response"
+    RESPONSE_CACHE_TTL_SECONDS: int = 43200
     SESSION_STORE_BACKEND: Literal["memory", "sqlite"] = "memory"
     SESSION_DB_PATH: str = "data/memory/session_memory.db"
     SEMANTIC_MEMORY_BACKEND: Literal["none", "sqlite"] = "sqlite"
@@ -82,10 +99,10 @@ class AppSettings(BaseSettings):
             raise ValueError("Semantic memory values must be greater than 0.")
         return value
 
-    @field_validator("EMBEDDING_CACHE_TTL_SECONDS")
-    def _validate_embedding_cache_ttl(cls, value: int) -> int:
+    @field_validator("EMBEDDING_CACHE_TTL_SECONDS", "RESPONSE_CACHE_TTL_SECONDS")
+    def _validate_cache_ttl(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError("EMBEDDING_CACHE_TTL_SECONDS must be greater than 0.")
+            raise ValueError("Cache TTL values must be greater than 0.")
         return value
 
 
