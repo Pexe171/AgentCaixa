@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import httpx
 
 
-@dataclass(slots=True)
+@dataclass
 class WhatsAppIncomingMessage:
     """Mensagem de entrada normalizada a partir do webhook."""
 
