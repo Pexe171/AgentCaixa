@@ -116,6 +116,12 @@ docker compose up --build -d
 docker compose down
 ```
 
+### 5.4 Observação importante sobre o Qdrant no Docker Compose
+
+O `docker-compose.yml` principal não usa mais healthcheck explícito para o serviço `qdrant`.
+
+Motivo: em alguns ambientes, a imagem do Qdrant pode não trazer utilitários como `wget`, o que fazia o contêiner ser marcado como `unhealthy` mesmo com a API já disponível. Com isso, o `api` agora depende de `qdrant` em `service_started`, evitando falso negativo no boot.
+
 > Se você quiser manter somente a infraestrutura (sem API/front), o arquivo legado `docker-compose.infra.yml` continua disponível.
 
 ---

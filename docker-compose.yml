@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   redis:
     image: redis:7-alpine
@@ -21,11 +19,6 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:6333/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 8
 
   api:
     build:
@@ -53,7 +46,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
 
   frontend:
     build:
