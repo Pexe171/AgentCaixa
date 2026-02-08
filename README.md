@@ -34,6 +34,7 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
 - Observabilidade por resposta com `trace_id` e estimativa de custo por request.
 - Recuperação vetorial avançada com suporte a `faiss` (com fallback local), além de provedores `qdrant`, `pgvector` e `weaviate`.
 - Execução opcional de linters durante scan (`run_linters=true`).
+- Suporte a **Tool Use** na integração OpenAI (`tools`), com execução de funções Python durante a resposta quando o modelo solicitar (ex.: `consultar_caixa(id_cliente)`).
 
 ## Arquitetura resumida
 
@@ -82,6 +83,18 @@ OPENAI_MODEL=gpt-4.1-mini
 OPENAI_API_KEY=<SUA_CHAVE_OPENAI>
 OPENAI_TIMEOUT_SECONDS=20
 ```
+
+### Tool Use (OpenAI)
+
+O gateway OpenAI agora aceita o campo `tools` da API `/v1/responses` e executa o ciclo de tool calling:
+
+1. modelo recebe as funções disponíveis;
+2. se houver `function_call`, o backend executa a função Python;
+3. o resultado volta como `function_call_output`;
+4. o modelo gera a resposta final com base no retorno da ferramenta.
+
+No fluxo de chat, a função `consultar_caixa` é disponibilizada para permitir consultas por `id_cliente`.
+
 
 ### Modo Ollama (local)
 
