@@ -175,7 +175,10 @@ setInterval(loadData, 10000);
 @app.post("/v1/agent/chat", response_model=AgentChatResponse)
 def agent_chat(payload: AgentChatRequest) -> AgentChatResponse:
     """Executa fluxo completo do agente HAG."""
-    return agent_service.chat(payload)
+    try:
+        return agent_service.chat(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/v1/agent/chat/stream")
@@ -183,10 +186,14 @@ def agent_chat_stream(payload: AgentChatRequest) -> StreamingResponse:
     """Executa fluxo de chat com transmissão incremental via SSE."""
 
     def event_stream() -> str:
-        for event in agent_service.chat_stream(payload):
-            event_name = str(event.get("event", "message"))
-            serialized = json.dumps(event, ensure_ascii=False)
-            yield f"event: {event_name}\ndata: {serialized}\n\n"
+        try:
+            for event in agent_service.chat_stream(payload):
+                event_name = str(event.get("event", "message"))
+                serialized = json.dumps(event, ensure_ascii=False)
+                yield f"event: {event_name}\ndata: {serialized}\n\n"
+        except ValueError as exc:
+            error_payload = {"event": "error", "detail": str(exc)}
+            yield f"event: error\ndata: {json.dumps(error_payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

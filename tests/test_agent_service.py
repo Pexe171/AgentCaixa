@@ -7,36 +7,40 @@ from rag_app.agent.service import AgentService
 from rag_app.config import AppSettings
 
 
-def test_agent_service_uses_mock_when_openai_not_configured() -> None:
+@pytest.fixture(autouse=True)
+def _stub_ollama_generate(monkeypatch):
+    from rag_app.agent import service as service_module
+
+    def fake_generate(self, system_prompt: str, user_prompt: str, tools=None, tool_executor=None):
+        del self, system_prompt, user_prompt, tools, tool_executor
+        return service_module.LLMOutput(
+            text="Resposta de teste via Ollama",
+            provider="ollama",
+            model="llama3.2",
+        )
+
+    monkeypatch.setattr(service_module.OllamaLLMGateway, "generate", fake_generate)
+
+
+def test_agent_service_falha_quando_openai_nao_esta_configurado() -> None:
     settings = AppSettings(
         LLM_PROVIDER="openai",
         OPENAI_API_KEY=None,
         OPENAI_MODEL=None,
     )
-    service = AgentService(settings=settings)
 
-    response = service.chat(
-        AgentChatRequest(user_message="Preciso de um plano para agente.")
-    )
-
-    assert response.diagnostics.provider_used == "mock"
-    assert response.diagnostics.fallback_used is True
-    assert response.citations
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        AgentService(settings=settings)
 
 
-def test_agent_service_uses_mock_when_ollama_not_configured() -> None:
+def test_agent_service_falha_quando_ollama_nao_esta_configurado() -> None:
     settings = AppSettings(
         LLM_PROVIDER="ollama",
         OLLAMA_MODEL=None,
     )
-    service = AgentService(settings=settings)
 
-    response = service.chat(
-        AgentChatRequest(user_message="Quero rodar localmente com ollama.")
-    )
-
-    assert response.diagnostics.provider_used == "mock"
-    assert response.diagnostics.fallback_used is True
+    with pytest.raises(ValueError, match="Configuração inválida de LLM"):
+        AgentService(settings=settings)
 
 
 def test_agent_scan_service(tmp_path: Path) -> None:
@@ -133,11 +137,11 @@ def test_rerank_reduces_context_to_top_five() -> None:
     assert len(reranked) == 5
 
 
-def test_query_translation_fallback_when_gateway_returns_mock_noise() -> None:
+def test_query_translation_fallback_when_translation_is_too_short() -> None:
     from rag_app.agent.service import _normalize_translated_query
 
     original = "E a situação do Zé?"
-    translated = "[MODO MOCK] Estruturei uma resposta completa"
+    translated = "situação?"
 
     assert _normalize_translated_query(original, translated) == original
 
@@ -163,8 +167,8 @@ def test_agent_service_rewrites_query_for_retrieval() -> None:
             class Output:
                 def __init__(self, text: str) -> None:
                     self.text = text
-                    self.provider = "mock"
-                    self.model = "mock"
+                    self.provider = "ollama"
+                    self.model = "llama3.2"
 
             if "Pergunta original" in user_prompt:
                 return Output(
@@ -219,12 +223,10 @@ def test_agent_guardrail_blocks_behavior_shift_with_session_context() -> None:
     assert any(token in blocked.answer.lower() for token in ("comportamental", "privacidade"))
 
 
-
-
 def test_agent_service_permite_override_para_ollama_por_requisicao(monkeypatch) -> None:
     from rag_app.agent import service as service_module
 
-    settings = AppSettings(LLM_PROVIDER="mock", OLLAMA_MODEL=None)
+    settings = AppSettings(LLM_PROVIDER="ollama", OLLAMA_MODEL="llama3.2")
     service = AgentService(settings=settings)
 
     def fake_generate(self, system_prompt: str, user_prompt: str, tools=None, tool_executor=None):
@@ -248,6 +250,55 @@ def test_agent_service_permite_override_para_ollama_por_requisicao(monkeypatch) 
 
     assert response.diagnostics.provider_used == "ollama"
     assert response.diagnostics.fallback_used is False
+
+
+def test_agent_service_nao_reutiliza_cache_entre_modelos_ollama_distintos(monkeypatch) -> None:
+    from rag_app.agent import service as service_module
+
+    settings = AppSettings(RESPONSE_CACHE_BACKEND="memory", LLM_PROVIDER="ollama")
+    service = AgentService(settings=settings)
+
+    def fake_generate_model_31(self, system_prompt: str, user_prompt: str, tools=None, tool_executor=None):
+        del self, system_prompt, user_prompt, tools, tool_executor
+        return service_module.LLMOutput(
+            text="Resposta via Ollama 3.1",
+            provider="ollama",
+            model="llama3.1",
+        )
+
+    def fake_generate_model_32(self, system_prompt: str, user_prompt: str, tools=None, tool_executor=None):
+        del self, system_prompt, user_prompt, tools, tool_executor
+        return service_module.LLMOutput(
+            text="Resposta via Ollama 3.2",
+            provider="ollama",
+            model="llama3.2",
+        )
+
+    monkeypatch.setattr(service_module.OllamaLLMGateway, "generate", fake_generate_model_31)
+    first = service.chat(
+        AgentChatRequest(
+            user_message="Explique estratégia para reduzir latência.",
+            llm_provider="ollama",
+            ollama_model="llama3.1",
+            ollama_base_url="http://localhost:11434",
+        )
+    )
+
+    monkeypatch.setattr(service_module.OllamaLLMGateway, "generate", fake_generate_model_32)
+    second = service.chat(
+        AgentChatRequest(
+            user_message="Explique estratégia para reduzir latência.",
+            llm_provider="ollama",
+            ollama_model="llama3.2",
+            ollama_base_url="http://localhost:11434",
+        )
+    )
+
+    assert first.diagnostics.provider_used == "ollama"
+    assert second.diagnostics.provider_used == "ollama"
+    assert second.answer != first.answer
+    assert second.diagnostics.provider_used != "response-cache"
+
 
 def test_agent_service_retorna_cache_de_resposta_em_pergunta_repetida() -> None:
     settings = AppSettings(RESPONSE_CACHE_BACKEND="memory")

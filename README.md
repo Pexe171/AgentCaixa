@@ -259,7 +259,7 @@ curl -X POST http://localhost:8000/v1/agent/chat \
   }'
 ```
 
-> Isso evita cair em resposta mock quando o provider padrão global não está em `ollama`.
+> Isso garante que a chamada use explicitamente seu Ollama local (ex.: Llama 3.2).
 
 ---
 
@@ -291,6 +291,8 @@ Se não houver SDK/chave/disponibilidade, o serviço faz fallback local.
 ## 10) Cache de respostas: economia de tokens
 
 Quando `RESPONSE_CACHE_BACKEND` está ativo, perguntas repetidas retornam do cache.
+
+A chave de cache considera também o provedor/modelo configurado (ex.: `openai` vs `ollama`), evitando reaproveitar resposta de um backend em outro.
 
 Efeito esperado:
 
@@ -362,7 +364,7 @@ Abrirá no navegador uma interface com:
 - seleção de tom e profundidade de raciocínio;
 - controle para exigir citações;
 - exibição de diagnóstico (provider, latência e trace_id);
-- alerta visual quando a resposta vier em **MODO MOCK**.
+- exibição de status do provedor utilizado (com foco em Ollama).
 
 Você pode trocar o endpoint da API via variável:
 
@@ -371,18 +373,15 @@ export AGENT_API_URL=http://localhost:8000/v1/agent/chat
 ```
 
 
-### 11.3 Por que aparece `[MODO MOCK]` no chat?
-
-Quando OpenAI/Ollama não estão corretamente configurados ou indisponíveis, o serviço faz fallback para o provedor mock.
+### 11.3 Como garantir resposta 100% Ollama no chat?
 
 No setup padrão deste repositório, o `docker-compose.yml` sobe com `LLM_PROVIDER=ollama` e `OLLAMA_MODEL=llama3.2`.
 
-Como resolver:
+Recomendação prática:
 
-1. Configure variáveis de ambiente válidas para OpenAI (`OPENAI_API_KEY` + `OPENAI_MODEL`) e use `LLM_PROVIDER=openai`; **ou**
-2. No próprio front-end, selecione `ollama` no campo **Provedor de LLM** e informe `Modelo Ollama` (e opcionalmente `URL do Ollama`).
-
-Assim, a requisição envia `llm_provider` no payload e evita fallback involuntário para mock.
+1. Mantenha `LLM_PROVIDER=ollama` e `OLLAMA_MODEL=llama3.2` no backend.
+2. No front-end, selecione `ollama` no campo **Provedor de LLM** e confirme a `URL do Ollama` (ex.: `http://localhost:11434`).
+3. Se o Ollama estiver indisponível, a API retorna erro explícito para ajuste operacional (sem resposta simulada).
 
 ---
 

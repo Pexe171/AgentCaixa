@@ -27,11 +27,11 @@ class AgentChatRequest(BaseModel):
     tone: Literal["profissional", "amigavel", "tecnico", "didatico"] = "profissional"
     reasoning_depth: Literal["rapido", "padrao", "profundo"] = "padrao"
     require_citations: bool = True
-    llm_provider: Literal["mock", "openai", "ollama"] | None = Field(
+    llm_provider: Literal["openai", "ollama"] | None = Field(
         default=None,
         description=(
             "Override opcional do provedor de LLM por requisição. "
-            "Aceita mock, openai e ollama."
+            "Aceita openai e ollama."
         ),
     )
     ollama_model: str | None = Field(

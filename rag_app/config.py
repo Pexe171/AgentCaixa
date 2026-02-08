@@ -25,12 +25,12 @@ class AppSettings(BaseSettings):
     HYBRID_ALPHA: float = 0.65
     STRICT_MIN_SCORE: float = 0.20
     ENABLE_DECOMPOSITION: bool = True
-    LLM_PROVIDER: Literal["mock", "openai", "ollama"] = "mock"
+    LLM_PROVIDER: Literal["openai", "ollama"] = "ollama"
     OPENAI_MODEL: str | None = None
     OPENAI_API_KEY: str | None = Field(default=None, repr=False)
     OPENAI_TIMEOUT_SECONDS: float = 20.0
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str | None = None
+    OLLAMA_MODEL: str | None = "llama3.2"
     OLLAMA_TIMEOUT_SECONDS: float = 30.0
     AGENT_NAME: str = "HAG-PTBR"
     VECTOR_PROVIDER: Literal[

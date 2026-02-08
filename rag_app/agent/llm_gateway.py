@@ -211,25 +211,3 @@ class OllamaLLMGateway:
             raise ValueError("Resposta do Ollama sem conteúdo em response.")
 
         return LLMOutput(text=answer_text, provider="ollama", model=self._model)
-
-
-class MockLLMGateway:
-    """Fallback determinístico quando OpenAI/Ollama não estão configurados."""
-
-    def generate(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        tools: list[dict[str, Any]] | None = None,
-        tool_executor: ToolExecutor | None = None,
-    ) -> LLMOutput:
-        del tools, tool_executor
-        del system_prompt
-        text = (
-            "[MODO MOCK] Estruturei uma resposta completa baseada no seu objetivo.\n\n"
-            f"Resumo do pedido: {user_prompt[:260]}\n\n"
-            "Próximos passos: validar requisitos, configurar dados, "
-            "integrar API da OpenAI ou Ollama, testar qualidade e "
-            "monitorar em produção."
-        )
-        return LLMOutput(text=text, provider="mock", model="mock-hag-v1")

@@ -7,6 +7,22 @@ from fastapi.testclient import TestClient
 from rag_app.api.main import app
 
 
+@pytest.fixture(autouse=True)
+def _stub_ollama_generate(monkeypatch):
+    from rag_app.agent import service as service_module
+
+    def fake_generate(self, system_prompt: str, user_prompt: str, tools=None, tool_executor=None):
+        del self, system_prompt, user_prompt, tools, tool_executor
+        return service_module.LLMOutput(
+            text="Resposta de teste via Ollama",
+            provider="ollama",
+            model="llama3.2",
+        )
+
+    monkeypatch.setattr(service_module.OllamaLLMGateway, "generate", fake_generate)
+
+
+
 def test_agent_chat_returns_structured_response() -> None:
     client = TestClient(app)
 
@@ -26,7 +42,7 @@ def test_agent_chat_returns_structured_response() -> None:
     assert "answer" in payload
     assert "citations" in payload
     assert "diagnostics" in payload
-    assert payload["diagnostics"]["provider_used"] in {"mock", "openai", "ollama"}
+    assert payload["diagnostics"]["provider_used"] in {"openai", "ollama"}
     assert isinstance(payload["citations"], list)
 
 
