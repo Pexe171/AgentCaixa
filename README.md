@@ -32,6 +32,8 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
 - Testes automatizados para API, serviço, scanner e configuração.
 - Memória por sessão (`session_id`) para continuidade de contexto em múltiplas mensagens.
 - Persistência de memória em banco SQLite (configurável) para manter histórico entre reinicializações.
+- Memória semântica de longo prazo com sumarização periódica e recuperação vetorial por sessão.
+- Orquestração multiagente com roteamento automático para especialistas (`analista_credito`, `especialista_juridico`, `atendimento_geral`).
 - Guardrails de segurança com bloqueio de padrões maliciosos e trilha de auditoria.
 - Observabilidade por resposta com `trace_id` e estimativa de custo por request.
 - Recuperação vetorial avançada com suporte a `faiss` (com fallback local), além de provedores `qdrant`, `pgvector` e `weaviate`.
@@ -118,6 +120,30 @@ Para persistência real entre reinícios da API, ative SQLite:
 SESSION_STORE_BACKEND=sqlite
 SESSION_DB_PATH=data/memory/session_memory.db
 ```
+
+## Memória semântica de longo prazo
+
+Além da janela curta de sessão, o agente agora cria resumos periódicos do diálogo e salva em SQLite com embedding vetorial para recall futuro.
+
+```bash
+SEMANTIC_MEMORY_BACKEND=sqlite
+SEMANTIC_MEMORY_DB_PATH=data/memory/semantic_memory.db
+SEMANTIC_MEMORY_RETRIEVE_TOP_K=3
+SEMANTIC_MEMORY_SUMMARY_INTERVAL=4
+```
+
+- `SEMANTIC_MEMORY_SUMMARY_INTERVAL`: a cada N mensagens na sessão, um resumo factual é persistido.
+- `SEMANTIC_MEMORY_RETRIEVE_TOP_K`: quantidade de memórias semânticas recuperadas e reinjetadas no prompt.
+
+## Multi-Agent Systems (orquestração por domínio)
+
+O pipeline agora possui um orquestrador leve por regras para escolher o especialista mais adequado antes de chamar o LLM:
+
+- `analista_credito`: ativa quando a pergunta contém indícios de crédito, score, limite, financiamento e risco.
+- `especialista_juridico`: ativa para termos contratuais, regulatórios, LGPD e compliance.
+- `atendimento_geral`: fallback para demais temas.
+
+O especialista roteado é exposto em `diagnostics.routed_specialist` e a justificativa em `diagnostics.routing_reason`.
 
 ## RAG vetorial avançado
 

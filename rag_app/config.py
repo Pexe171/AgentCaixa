@@ -36,6 +36,10 @@ class AppSettings(BaseSettings):
     VECTOR_PROVIDER: Literal["none", "faiss", "qdrant", "pgvector", "weaviate"] = "none"
     SESSION_STORE_BACKEND: Literal["memory", "sqlite"] = "memory"
     SESSION_DB_PATH: str = "data/memory/session_memory.db"
+    SEMANTIC_MEMORY_BACKEND: Literal["none", "sqlite"] = "sqlite"
+    SEMANTIC_MEMORY_DB_PATH: str = "data/memory/semantic_memory.db"
+    SEMANTIC_MEMORY_RETRIEVE_TOP_K: int = 3
+    SEMANTIC_MEMORY_SUMMARY_INTERVAL: int = 4
     ENABLE_LINTER_SCAN: bool = False
     AUDIT_LOG_PATH: str = "data/audit/agent_audit.log"
     COST_PER_1K_TOKENS_USD: float = 0.002
@@ -62,6 +66,15 @@ class AppSettings(BaseSettings):
     def _validate_provider_timeout(cls, value: float) -> float:
         if value <= 0:
             raise ValueError("Provider timeout must be greater than 0.")
+        return value
+
+    @field_validator(
+        "SEMANTIC_MEMORY_RETRIEVE_TOP_K",
+        "SEMANTIC_MEMORY_SUMMARY_INTERVAL",
+    )
+    def _validate_semantic_memory_positive(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Semantic memory values must be greater than 0.")
         return value
 
 

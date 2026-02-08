@@ -39,6 +39,8 @@ class AgentDiagnostics(BaseModel):
     fallback_used: bool
     trace_id: str
     estimated_cost_usd: float
+    routed_specialist: str = "atendimento_geral"
+    routing_reason: str = "Sem roteamento especializado."
 
 
 class AgentChatResponse(BaseModel):

@@ -22,6 +22,18 @@ class SessionMemoryStore:
     def get_recent(self, session_id: str) -> list[str]:
         return list(self._messages.get(session_id, []))
 
+    def get_recent_entries(self, session_id: str) -> list[tuple[str, str]]:
+        entries: list[tuple[str, str]] = []
+        for item in self._messages.get(session_id, []):
+            if ": " not in item:
+                continue
+            role, content = item.split(": ", maxsplit=1)
+            entries.append((role, content))
+        return entries
+
+    def count(self, session_id: str) -> int:
+        return len(self._messages.get(session_id, []))
+
 
 class SQLiteSessionMemoryStore:
     """Memória persistente por sessão usando SQLite."""
@@ -60,6 +72,10 @@ class SQLiteSessionMemoryStore:
             )
 
     def get_recent(self, session_id: str) -> list[str]:
+        rows = self.get_recent_entries(session_id)
+        return [f"{role}: {content}" for role, content in rows]
+
+    def get_recent_entries(self, session_id: str) -> list[tuple[str, str]]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -72,5 +88,16 @@ class SQLiteSessionMemoryStore:
                 (session_id, self._max_messages),
             ).fetchall()
 
-        ordered_rows = list(reversed(rows))
-        return [f"{role}: {content}" for role, content in ordered_rows]
+        return list(reversed(rows))
+
+    def count(self, session_id: str) -> int:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM session_messages
+                WHERE session_id = ?
+                """,
+                (session_id,),
+            ).fetchone()
+        return int(row[0] if row else 0)
