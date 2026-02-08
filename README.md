@@ -28,9 +28,10 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
   - `scan` (varredura local de código)
 - Testes automatizados para API, serviço, scanner e configuração.
 - Memória por sessão (`session_id`) para continuidade de contexto em múltiplas mensagens.
+- Persistência de memória em banco SQLite (configurável) para manter histórico entre reinicializações.
 - Guardrails de segurança com bloqueio de padrões maliciosos e trilha de auditoria.
 - Observabilidade por resposta com `trace_id` e estimativa de custo por request.
-- Integração de recuperação vetorial via provedor configurável (`pgvector`, `qdrant`, `weaviate`).
+- Recuperação vetorial avançada com suporte a `faiss` (com fallback local), além de provedores `qdrant`, `pgvector` e `weaviate`.
 - Execução opcional de linters durante scan (`run_linters=true`).
 
 ## Arquitetura resumida
@@ -62,6 +63,8 @@ PROJECT_NAME=rag_app
 LLM_PROVIDER=mock
 RETRIEVE_TOP_K_DEFAULT=6
 VECTOR_PROVIDER=none
+SESSION_STORE_BACKEND=memory
+SESSION_DB_PATH=data/memory/session_memory.db
 ENABLE_LINTER_SCAN=false
 AUDIT_LOG_PATH=data/audit/agent_audit.log
 COST_PER_1K_TOKENS_USD=0.002
@@ -85,6 +88,32 @@ LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.1:8b
 OLLAMA_TIMEOUT_SECONDS=30
+```
+
+
+## Persistência de memória de conversa
+
+Por padrão, a memória de sessão roda em `memory` (somente processo atual).
+Para persistência real entre reinícios da API, ative SQLite:
+
+```bash
+SESSION_STORE_BACKEND=sqlite
+SESSION_DB_PATH=data/memory/session_memory.db
+```
+
+## RAG vetorial avançado
+
+O projeto agora possui recuperação vetorial com embeddings densos determinísticos e ranqueamento por similaridade de cosseno:
+
+- `VECTOR_PROVIDER=faiss`: usa pipeline compatível com FAISS; se o pacote não estiver instalado, aplica fallback local automático com a mesma estratégia vetorial.
+- `VECTOR_PROVIDER=qdrant`: usa pipeline vetorial local compatível para facilitar migração para Qdrant.
+- `VECTOR_PROVIDER=none`: desativa camada vetorial.
+
+Exemplo:
+
+```bash
+VECTOR_PROVIDER=faiss
+RETRIEVE_TOP_K_DEFAULT=6
 ```
 
 ## Execução local
