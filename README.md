@@ -442,3 +442,25 @@ No GitHub Actions (`.github/workflows/evaluate-agent.yml`), a API sobe localment
 - Se `OPENAI_API_KEY` estiver disponível, roda com judge OpenAI.
 - Sem chave, roda com judge heurístico local.
 - O job falha automaticamente quando a qualidade regrede além do limite definido.
+
+
+## 16) Solução de problemas (troubleshooting)
+
+### Erro: `ImportError: cannot import name 'scan_folder'`
+
+Se ao subir a API aparecer erro de importação em `rag_app.agent.scanner`, confirme que o arquivo contém a função `scan_folder(...)` e que você está executando a versão mais recente do projeto.
+
+Validação rápida:
+
+```bash
+python -c "from rag_app.agent.scanner import scan_folder; print('ok')"
+```
+
+### Erro de dependência opcional (`ModuleNotFoundError: langchain_community`)
+
+Alguns módulos vetoriais usam extras opcionais. Instale o pacote com extras para ambiente de desenvolvimento:
+
+```bash
+pip install -e .[dev,rag]
+```
+
