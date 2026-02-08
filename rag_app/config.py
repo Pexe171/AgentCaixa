@@ -47,6 +47,7 @@ class AppSettings(BaseSettings):
     ENABLE_LINTER_SCAN: bool = False
     AUDIT_LOG_PATH: str = "data/audit/agent_audit.log"
     COST_PER_1K_TOKENS_USD: float = 0.002
+    JUDGE_RESULTS_PATH: str = "data/evals/judge_results.json"
 
     @field_validator("HYBRID_ALPHA")
     def _validate_hybrid_alpha(cls, value: float) -> float:

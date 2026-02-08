@@ -36,13 +36,15 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
 - Persistência de memória em banco SQLite (configurável) para manter histórico entre reinicializações.
 - Memória semântica de longo prazo com sumarização periódica e recuperação vetorial por sessão.
 - Orquestração multiagente com roteamento automático para especialistas (`analista_credito`, `especialista_juridico`, `atendimento_geral`).
-- Guardrails de segurança com bloqueio de padrões maliciosos e trilha de auditoria.
+- Guardrails de segurança com bloqueio de padrões maliciosos, detecção de PII/exfiltração e mudanças drásticas de comportamento com contexto de sessão.
 - Observabilidade por resposta com `trace_id` e estimativa de custo por request.
 - Resiliência HTTP com **exponential backoff + retries** para falhas transitórias e rate limits em OpenAI/Ollama.
 - Cache de embeddings com backend em memória (padrão) e opção Redis para reduzir latência/custo em consultas repetidas.
 - Recuperação vetorial avançada com suporte a `faiss` (com fallback local), além de provedores `qdrant`, `pgvector` e `weaviate`.
 - Execução opcional de linters durante scan (`run_linters=true`).
 - Suporte a **Tool Use** na integração OpenAI (`tools`), com execução de funções Python durante a resposta quando o modelo solicitar (ex.: `consultar_caixa(id_cliente)`).
+- Dashboard administrativo em `/admin/dashboard` para acompanhar eventos de auditoria e notas do judge em tempo real.
+- Parser DOCX com suporte a blocos de imagem via OCR (quando `pillow` + `pytesseract` estiverem instalados).
 
 ## Arquitetura resumida
 
@@ -80,6 +82,7 @@ SESSION_DB_PATH=data/memory/session_memory.db
 ENABLE_LINTER_SCAN=false
 AUDIT_LOG_PATH=data/audit/agent_audit.log
 COST_PER_1K_TOKENS_USD=0.002
+JUDGE_RESULTS_PATH=data/evals/judge_results.json
 ```
 
 ### Modo OpenAI
@@ -200,6 +203,37 @@ EMBEDDING_CACHE_TTL_SECONDS=86400
 ```
 
 Se `EMBEDDING_CACHE_BACKEND=redis` e o pacote `redis` não estiver disponível, o sistema usa fallback automático para cache em memória.
+
+
+## Dashboard administrativo e integração de avaliação
+
+A API expõe:
+
+- `GET /admin/metrics`: retorna métricas agregadas de auditoria e avaliação do judge.
+- `GET /admin/dashboard`: interface HTML simples para monitorização gráfica em tempo real.
+
+O dashboard lê:
+
+- `AUDIT_LOG_PATH` (trilha de auditoria do agente);
+- `JUDGE_RESULTS_PATH` (saída JSON da avaliação do judge).
+
+Para gerar o arquivo do judge:
+
+```bash
+python scripts/evaluate_agent_with_judge.py --output-path data/evals/judge_results.json
+```
+
+## OCR em documentos DOCX
+
+O parser `rag_app/ingest/parser_docx.py` agora extrai texto de imagens incorporadas no DOCX (blocos `type="image"`).
+
+Dependências opcionais:
+
+```bash
+pip install pillow pytesseract
+```
+
+> Observação: para OCR real também é necessário o binário do Tesseract instalado no sistema operacional.
 
 ## Execução local
 

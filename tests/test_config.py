@@ -11,6 +11,7 @@ def test_load_settings_defaults(monkeypatch) -> None:
     assert settings.PROJECT_NAME == "rag_app"
     assert settings.LOG_LEVEL == "INFO"
     assert settings.RETRIEVE_TOP_K_DEFAULT == 6
+    assert settings.JUDGE_RESULTS_PATH == "data/evals/judge_results.json"
 
 
 def test_load_settings_env_override(monkeypatch) -> None:
