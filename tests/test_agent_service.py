@@ -108,3 +108,26 @@ def test_agent_service_uses_sqlite_memory_backend(tmp_path: Path) -> None:
     assert first_response.answer
     assert second_response.answer
     assert database_path.exists()
+
+
+def test_extract_selected_indexes_parses_json_payload() -> None:
+    from rag_app.agent.service import _extract_selected_indexes
+
+    raw_text = 'texto {"selected_indexes": [2, 0, 2, 11, -1, 4]} fim'
+    parsed = _extract_selected_indexes(raw_text=raw_text, max_index=5)
+
+    assert parsed == [2, 0, 4]
+
+
+def test_rerank_reduces_context_to_top_five() -> None:
+    from rag_app.agent.schemas import ContextSnippet
+
+    service = AgentService(settings=AppSettings())
+    snippets = [
+        ContextSnippet(source=f"fonte-{index}", content="agente contexto", score=0.9)
+        for index in range(10)
+    ]
+
+    reranked = service._rerank_snippets(query="agente contexto", snippets=snippets)
+
+    assert len(reranked) == 5
