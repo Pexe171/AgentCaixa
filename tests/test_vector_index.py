@@ -43,3 +43,12 @@ def test_vector_retriever_embedding_cache_reuses_query_embedding() -> None:
     second_size = len(retriever._embedding_cache._memory_store)  # type: ignore[attr-defined]
 
     assert first_size == second_size
+
+
+def test_vector_retriever_pinecone_sem_dependencia_faz_fallback_local() -> None:
+    retriever = VectorRetriever(settings=AppSettings(VECTOR_PROVIDER="pinecone"))
+
+    results = retriever.retrieve(query="estratégia de observabilidade", top_k=1)
+
+    assert len(results) == 1
+    assert results[0].source.startswith("vector-pinecone")
