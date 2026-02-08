@@ -356,15 +356,30 @@ streamlit run frontend/chat_app.py
 Abrirá no navegador uma interface com:
 
 - histórico de conversa;
+- seleção de **provedor de LLM** (padrão do backend, OpenAI, Ollama ou mock);
+- campos opcionais de **modelo** e **URL do Ollama** para override por requisição;
 - seleção de tom e profundidade de raciocínio;
 - controle para exigir citações;
-- exibição de diagnóstico (provider, latência e trace_id).
+- exibição de diagnóstico (provider, latência e trace_id);
+- alerta visual quando a resposta vier em **MODO MOCK**.
 
 Você pode trocar o endpoint da API via variável:
 
 ```bash
 export AGENT_API_URL=http://localhost:8000/v1/agent/chat
 ```
+
+
+### 11.3 Por que aparece `[MODO MOCK]` no chat?
+
+Quando o backend está com `LLM_PROVIDER=mock` (padrão no `docker-compose.yml`) ou quando OpenAI/Ollama não estão corretamente configurados, o serviço faz fallback para o provedor mock.
+
+Como resolver:
+
+1. Configure variáveis de ambiente válidas para OpenAI (`OPENAI_API_KEY` + `OPENAI_MODEL`) e use `LLM_PROVIDER=openai`; **ou**
+2. No próprio front-end, selecione `ollama` no campo **Provedor de LLM** e informe `Modelo Ollama` (e opcionalmente `URL do Ollama`).
+
+Assim, a requisição envia `llm_provider` no payload e evita fallback involuntário para mock.
 
 ---
 

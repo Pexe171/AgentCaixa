@@ -19,6 +19,26 @@ if "messages" not in st.session_state:
 
 with st.sidebar:
     st.header("Configurações")
+    llm_provider = st.selectbox(
+        "Provedor de LLM",
+        ["padrao-backend", "openai", "ollama", "mock"],
+        index=0,
+        help=(
+            "Use padrao-backend para respeitar o servidor. "
+            "Selecione openai/ollama para override por requisição."
+        ),
+    )
+    ollama_model = st.text_input(
+        "Modelo Ollama (opcional)",
+        value="",
+        help="Usado apenas quando o provedor selecionado for ollama.",
+    )
+    ollama_base_url = st.text_input(
+        "URL do Ollama (opcional)",
+        value="",
+        help="Exemplo: http://localhost:11434",
+    )
+    st.divider()
     tone = st.selectbox(
         "Tom da resposta",
         ["profissional", "amigavel", "tecnico", "didatico"],
@@ -52,6 +72,13 @@ if prompt:
         "require_citations": require_citations,
     }
 
+    if llm_provider != "padrao-backend":
+        payload["llm_provider"] = llm_provider
+    if llm_provider == "ollama" and ollama_model.strip():
+        payload["ollama_model"] = ollama_model.strip()
+    if llm_provider == "ollama" and ollama_base_url.strip():
+        payload["ollama_base_url"] = ollama_base_url.strip()
+
     with st.chat_message("assistant"):
         with st.spinner("Consultando o Agente Caixa..."):
             try:
@@ -75,9 +102,16 @@ if prompt:
                     content += f"\n\n**Fontes principais**\n{fontes}"
 
                 if diagnostics:
+                    provider_used = str(diagnostics.get("provider_used", "")).lower()
+                    if provider_used == "mock":
+                        st.warning(
+                            "A resposta foi gerada em MODO MOCK. "
+                            "Configure OPENAI_API_KEY + OPENAI_MODEL "
+                            "ou use override para Ollama para obter resposta real."
+                        )
                     content += (
                         "\n\n<sub>"
-                        f"provider={diagnostics.get('provider_used')} | "
+                        f"provider={provider_used or diagnostics.get('provider_used')} | "
                         f"latência={diagnostics.get('latency_ms')}ms | "
                         f"trace_id={diagnostics.get('trace_id')}"
                         "</sub>"
