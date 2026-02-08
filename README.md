@@ -27,6 +27,11 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
   - `ingest` (documentos)
   - `scan` (varredura local de código)
 - Testes automatizados para API, serviço, scanner e configuração.
+- Memória por sessão (`session_id`) para continuidade de contexto em múltiplas mensagens.
+- Guardrails de segurança com bloqueio de padrões maliciosos e trilha de auditoria.
+- Observabilidade por resposta com `trace_id` e estimativa de custo por request.
+- Integração de recuperação vetorial via provedor configurável (`pgvector`, `qdrant`, `weaviate`).
+- Execução opcional de linters durante scan (`run_linters=true`).
 
 ## Arquitetura resumida
 
@@ -56,6 +61,10 @@ Aplicação Python 3.11+ para um agente **HAG (Hybrid Agentic Generation)** com 
 PROJECT_NAME=rag_app
 LLM_PROVIDER=mock
 RETRIEVE_TOP_K_DEFAULT=6
+VECTOR_PROVIDER=none
+ENABLE_LINTER_SCAN=false
+AUDIT_LOG_PATH=data/audit/agent_audit.log
+COST_PER_1K_TOKENS_USD=0.002
 ```
 
 ### Modo OpenAI
@@ -116,7 +125,8 @@ curl -X POST http://localhost:8000/v1/agent/scan \
   -d '{
     "folder_path": "/workspace/AgentCaixa",
     "include_hidden": false,
-    "max_files": 500
+    "max_files": 500,
+    "run_linters": true
   }'
 ```
 
@@ -134,11 +144,3 @@ python -m rag_app.cli scan --folder /workspace/AgentCaixa --max-files 500
 ruff check .
 pytest -q
 ```
-
-## Próximos passos para evolução “nível produção”
-
-- Memória por sessão (`session_id`) com Redis/Postgres.
-- Indexação vetorial real (pgvector/Qdrant/Weaviate).
-- Execução opcional de linters por linguagem durante scan (flake8/eslint/golangci-lint etc.).
-- Guardrails e políticas de segurança com trilha de auditoria.
-- Observabilidade completa (OpenTelemetry, custo por request, tracing distribuído).

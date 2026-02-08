@@ -60,3 +60,24 @@ def test_agent_scan_invalid_folder_returns_400() -> None:
     )
 
     assert response.status_code == 400
+
+
+def test_agent_scan_can_run_linters(tmp_path: Path) -> None:
+    file_path = tmp_path / "main.py"
+    file_path.write_text("print('debug')\n", encoding="utf-8")
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/agent/scan",
+        json={
+            "folder_path": str(tmp_path),
+            "include_hidden": False,
+            "max_files": 100,
+            "run_linters": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "linter_findings" in payload
+    assert "Linters executados: sim" in payload["summary"]
