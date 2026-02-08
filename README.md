@@ -100,10 +100,29 @@ Subir infraestrutura:
 docker compose -f docker-compose.infra.yml up -d
 ```
 
+> Se aparecer erro como `unknown shorthand flag: 'f' in -f`, sua instalação provavelmente **não tem o plugin `docker compose`** habilitado.
+> Nesse caso, use o binário legado:
+
+```bash
+docker-compose -f docker-compose.infra.yml up -d
+```
+
+Verificação rápida:
+
+```bash
+docker compose version || docker-compose --version
+```
+
 Parar infraestrutura:
 
 ```bash
 docker compose -f docker-compose.infra.yml down
+```
+
+Fallback legado:
+
+```bash
+docker-compose -f docker-compose.infra.yml down
 ```
 
 ---
