@@ -18,6 +18,7 @@ from rag_app.agent.llm_gateway import (
     OpenAILLMGateway,
     ToolExecutor,
 )
+from rag_app.agent.orchestration import route_to_specialist, specialist_instruction
 from rag_app.agent.scanner import scan_folder
 from rag_app.agent.schemas import (
     AgentChatRequest,
@@ -26,6 +27,10 @@ from rag_app.agent.schemas import (
     AgentScanRequest,
     AgentScanResponse,
     ContextSnippet,
+)
+from rag_app.agent.semantic_memory import (
+    SQLiteSemanticMemoryStore,
+    build_semantic_summary,
 )
 from rag_app.agent.session_memory import SessionMemoryStore, SQLiteSessionMemoryStore
 from rag_app.agent.vector_index import VectorRetriever
@@ -58,7 +63,12 @@ def _build_planning_prompt(user_message: str, memory_blocks: list[str]) -> str:
     )
 
 
-def _build_system_prompt(tone: str, depth: str, require_citations: bool) -> str:
+def _build_system_prompt(
+    tone: str,
+    depth: str,
+    require_citations: bool,
+    specialist: str,
+) -> str:
     citation_rule = (
         "Inclua citações explícitas às fontes de contexto usadas."
         if require_citations
@@ -67,6 +77,7 @@ def _build_system_prompt(tone: str, depth: str, require_citations: bool) -> str:
     return (
         "Você é um agente HAG de altíssima qualidade para uso corporativo. "
         f"Tom exigido: {tone}. Profundidade de raciocínio: {depth}. "
+        f"Especialização ativa: {specialist_instruction(specialist)} "
         "Entregue resposta estruturada, prática, fiel ao contexto "
         "e sem inventar fatos. "
         f"{citation_rule}"
@@ -247,6 +258,12 @@ def _resolve_session_memory(
     return SessionMemoryStore()
 
 
+def _resolve_semantic_memory(settings: AppSettings) -> SQLiteSemanticMemoryStore | None:
+    if settings.SEMANTIC_MEMORY_BACKEND == "sqlite":
+        return SQLiteSemanticMemoryStore(database_path=settings.SEMANTIC_MEMORY_DB_PATH)
+    return None
+
+
 class AgentService:
     """Serviço principal de execução do agente."""
 
@@ -254,7 +271,20 @@ class AgentService:
         self._settings = settings
         self._gateway = _resolve_gateway(settings)
         self._memory = _resolve_session_memory(settings)
+        self._semantic_memory = _resolve_semantic_memory(settings)
         self._vector_retriever = VectorRetriever(settings=settings)
+
+    def _maybe_persist_semantic_memory(self, session_id: str) -> None:
+        if self._semantic_memory is None:
+            return
+
+        message_count = self._memory.count(session_id)
+        if message_count % self._settings.SEMANTIC_MEMORY_SUMMARY_INTERVAL != 0:
+            return
+
+        recent_entries = self._memory.get_recent_entries(session_id)
+        summary = build_semantic_summary(recent_entries=recent_entries)
+        self._semantic_memory.add_summary(session_id=session_id, summary=summary)
 
     def _estimate_cost(self, prompt: str, answer: str) -> float:
         approx_tokens = max(1, (len(prompt) + len(answer)) // 4)
@@ -360,11 +390,25 @@ class AgentService:
         memory_blocks: list[str] = []
         if request.session_id:
             memory_blocks = self._memory.get_recent(request.session_id)
+            if self._semantic_memory is not None:
+                semantic_blocks = self._semantic_memory.retrieve_relevant(
+                    session_id=request.session_id,
+                    query=request.user_message,
+                    top_k=self._settings.SEMANTIC_MEMORY_RETRIEVE_TOP_K,
+                )
+                if semantic_blocks:
+                    memory_blocks.append("Memória semântica de longo prazo:")
+                    memory_blocks.extend(
+                        [f"- {semantic_block}" for semantic_block in semantic_blocks]
+                    )
+
+        routing = route_to_specialist(request.user_message)
 
         system_prompt = _build_system_prompt(
             tone=request.tone,
             depth=request.reasoning_depth,
             require_citations=request.require_citations,
+            specialist=routing.specialist,
         )
         execution_plan = self._build_execution_plan(
             user_message=request.user_message,
@@ -388,6 +432,7 @@ class AgentService:
         if request.session_id:
             self._memory.append(request.session_id, "usuario", request.user_message)
             self._memory.append(request.session_id, "agente", llm_output.text)
+            self._maybe_persist_semantic_memory(request.session_id)
 
         latency_ms = int((time.perf_counter() - start) * 1000)
         diagnostics = AgentDiagnostics(
@@ -398,6 +443,8 @@ class AgentService:
             fallback_used=llm_output.provider == "mock",
             trace_id=trace_id,
             estimated_cost_usd=self._estimate_cost(user_prompt, llm_output.text),
+            routed_specialist=routing.specialist,
+            routing_reason=routing.reason,
         )
 
         append_audit_event(
