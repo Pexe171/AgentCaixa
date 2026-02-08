@@ -160,6 +160,44 @@ RESPONSE_CACHE_REDIS_URL=redis://localhost:6379/1
 
 ---
 
+### 7.1 Observabilidade com tracing (Langfuse ou LangSmith)
+
+Para habilitar tracing detalhado do fluxo de orquestração:
+
+```bash
+OBSERVABILITY_ENABLED=true
+OBSERVABILITY_PROVIDER=langsmith
+LANGSMITH_API_KEY=<sua-chave>
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_PROJECT=agentcaixa
+```
+
+Alternativa com Langfuse:
+
+```bash
+OBSERVABILITY_ENABLED=true
+OBSERVABILITY_PROVIDER=langfuse
+LANGFUSE_PUBLIC_KEY=<public-key>
+LANGFUSE_SECRET_KEY=<secret-key>
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+Com isso, cada etapa do agente passa a ficar rastreável com spans e metadados para facilitar debug de falhas de raciocínio.
+
+### 7.2 Parser DOCX para tabelas complexas
+
+O parser padrão segue funcionando com `python-docx` + OCR, porém agora existe fallback automático para extração estruturada de tabelas com:
+
+- **Docling** (prioridade 1);
+- **Unstructured.io** (prioridade 2);
+- serialização interna padrão (fallback final).
+
+Para instalar extras de parser:
+
+```bash
+pip install -e .[parser]
+```
+
 ## 8) Como executar
 
 ### 8.1 API

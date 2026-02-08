@@ -1,4 +1,4 @@
-"""Parse .docx files into ordered blocks, incluindo OCR de imagens."""
+"""Parse .docx files into ordered blocks com OCR e extração estruturada opcional."""
 
 from __future__ import annotations
 
@@ -77,10 +77,86 @@ def _extract_ocr_text(document: Document, rel_id: str) -> str:
         return _normalize_text(pytesseract.image_to_string(image))
 
 
+def _extract_tables_with_docling(docx_path: Path) -> list[str] | None:
+    try:
+        from docling.document_converter import DocumentConverter
+    except Exception:  # pragma: no cover - dependência opcional
+        return None
+
+    try:
+        result = DocumentConverter().convert(str(docx_path))
+        document = getattr(result, "document", None)
+        if document is None:
+            return None
+
+        tables: list[str] = []
+        export_tables = getattr(document, "export_to_tables", None)
+        if callable(export_tables):
+            for table in export_tables() or []:
+                table_text = _normalize_text(str(table))
+                if table_text:
+                    tables.append(table_text)
+        if tables:
+            return tables
+
+        export_markdown = getattr(document, "export_to_markdown", None)
+        if not callable(export_markdown):
+            return None
+
+        lines = str(export_markdown() or "").splitlines()
+        markdown_rows = [line.strip() for line in lines if "|" in line]
+        if not markdown_rows:
+            return None
+
+        return [_normalize_text("\n".join(markdown_rows))]
+    except Exception:
+        return None
+
+
+def _extract_tables_with_unstructured(docx_path: Path) -> list[str] | None:
+    try:
+        from unstructured.partition.docx import partition_docx
+    except Exception:  # pragma: no cover - dependência opcional
+        return None
+
+    try:
+        elements = partition_docx(filename=str(docx_path), infer_table_structure=True)
+    except Exception:
+        return None
+
+    tables: list[str] = []
+    for element in elements:
+        category = str(getattr(element, "category", "")).lower()
+        if category != "table":
+            continue
+
+        html_text = getattr(getattr(element, "metadata", None), "text_as_html", None)
+        raw_text = html_text or str(element)
+        normalized = _normalize_text(raw_text)
+        if normalized:
+            tables.append(normalized)
+
+    return tables or None
+
+
+def _extract_structured_tables(docx_path: Path) -> list[str]:
+    docling_tables = _extract_tables_with_docling(docx_path)
+    if docling_tables:
+        return docling_tables
+
+    unstructured_tables = _extract_tables_with_unstructured(docx_path)
+    if unstructured_tables:
+        return unstructured_tables
+
+    return []
+
+
 def parse_docx_to_blocks(docx_path: Path) -> list[Block]:
     doc = Document(docx_path)
     blocks: list[Block] = []
     order = 1
+    structured_tables = _extract_structured_tables(docx_path)
+    structured_table_index = 0
 
     for item in _iter_block_items(doc):
         if isinstance(item, Paragraph):
@@ -96,7 +172,12 @@ def parse_docx_to_blocks(docx_path: Path) -> list[Block]:
                 blocks.append(Block(type="image", text=ocr_text, order=order))
                 order += 1
         else:
-            text = _serialize_table(item)
+            if structured_table_index < len(structured_tables):
+                text = structured_tables[structured_table_index]
+                structured_table_index += 1
+            else:
+                text = _serialize_table(item)
+
             if not text:
                 continue
             blocks.append(Block(type="table", text=text, order=order))

@@ -67,6 +67,9 @@ class AppSettings(BaseSettings):
     JUDGE_RESULTS_PATH: str = "data/evals/judge_results.json"
     OBSERVABILITY_ENABLED: bool = False
     OBSERVABILITY_PROVIDER: Literal["none", "langfuse", "langsmith"] = "none"
+    LANGSMITH_API_KEY: str | None = Field(default=None, repr=False)
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGSMITH_PROJECT: str = "agentcaixa"
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     LANGFUSE_PUBLIC_KEY: str | None = Field(default=None, repr=False)
     LANGFUSE_SECRET_KEY: str | None = Field(default=None, repr=False)
