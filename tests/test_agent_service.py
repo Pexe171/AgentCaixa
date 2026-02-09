@@ -123,7 +123,7 @@ def test_extract_selected_indexes_parses_json_payload() -> None:
     assert parsed == [2, 0, 4]
 
 
-def test_rerank_reduces_context_to_top_five() -> None:
+def test_rerank_reduces_context_to_top_three() -> None:
     from rag_app.agent.schemas import ContextSnippet
 
     service = AgentService(settings=AppSettings())
@@ -134,8 +134,27 @@ def test_rerank_reduces_context_to_top_five() -> None:
 
     reranked = service._rerank_snippets(query="agente contexto", snippets=snippets)
 
-    assert len(reranked) == 5
+    assert len(reranked) == 3
 
+
+
+
+def test_apply_exact_keyword_boost_prioritiza_termos_tecnicos() -> None:
+    from rag_app.agent.schemas import ContextSnippet
+    from rag_app.agent.service import _apply_exact_keyword_boost
+
+    snippets = [
+        ContextSnippet(source="a", content="Processo genérico sem termo", score=0.9),
+        ContextSnippet(
+            source="b",
+            content="Fluxo do FGTS Caixa para saque aniversário",
+            score=0.4,
+        ),
+    ]
+
+    boosted = _apply_exact_keyword_boost(query="FGTS Caixa", snippets=snippets)
+
+    assert boosted[0].source == "b"
 
 def test_query_translation_fallback_when_translation_is_too_short() -> None:
     from rag_app.agent.service import _normalize_translated_query
