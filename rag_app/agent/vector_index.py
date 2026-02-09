@@ -8,7 +8,7 @@ import os
 from dataclasses import dataclass
 
 from rag_app.agent.schemas import ContextSnippet
-from rag_app.config import AppSettings
+from rag_app.config import AppSettings, load_settings
 
 
 @dataclass(frozen=True)
@@ -157,10 +157,11 @@ class VectorRetriever:
 
 
 class VectorIndex:
-    def __init__(self):
+    def __init__(self, settings: AppSettings | None = None):
         from langchain_ollama import OllamaEmbeddings
 
-        self.embeddings = OllamaEmbeddings(model="nomic-embed-text")
+        self._settings = settings or load_settings()
+        self.embeddings = OllamaEmbeddings(model=self._settings.OLLAMA_EMBEDDING_MODEL)
         self.index_path = os.path.join(os.getcwd(), "data", "index")
 
     def ingest_file(self, file_path: str):

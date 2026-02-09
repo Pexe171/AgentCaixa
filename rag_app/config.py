@@ -31,6 +31,7 @@ class AppSettings(BaseSettings):
     OPENAI_TIMEOUT_SECONDS: float = 20.0
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str | None = "llama3.2"
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
     OLLAMA_TIMEOUT_SECONDS: float = 30.0
     AGENT_NAME: str = "HAG-PTBR"
     VECTOR_PROVIDER: Literal[
