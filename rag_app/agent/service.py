@@ -139,6 +139,44 @@ def _rank_candidates(
     return sorted(snippets, key=rerank_score, reverse=True)
 
 
+def _extract_query_keywords(query: str) -> set[str]:
+    punctuation = ".,:;!?()[]{}\"'"
+    keywords: set[str] = set()
+    for token in query.split():
+        cleaned = token.strip(punctuation).lower()
+        if len(cleaned) < 3:
+            continue
+        keywords.add(cleaned)
+    return keywords
+
+
+def _apply_exact_keyword_boost(
+    query: str,
+    snippets: list[ContextSnippet],
+) -> list[ContextSnippet]:
+    keywords = _extract_query_keywords(query)
+    if not keywords:
+        return snippets
+
+    boosted_snippets: list[ContextSnippet] = []
+    for snippet in snippets:
+        content_normalized = snippet.content.lower()
+        matched_keywords = sum(
+            1 for keyword in keywords if keyword in content_normalized
+        )
+        exact_keyword_score = matched_keywords / max(1, len(keywords))
+        blended_score = (snippet.score * 0.6) + (exact_keyword_score * 0.4)
+        boosted_snippets.append(
+            ContextSnippet(
+                source=snippet.source,
+                content=snippet.content,
+                score=min(1.0, blended_score),
+            )
+        )
+
+    return sorted(boosted_snippets, key=lambda snippet: snippet.score, reverse=True)
+
+
 def _build_rerank_prompt(query: str, snippets: list[ContextSnippet]) -> str:
     serialized = [
         {
@@ -151,8 +189,9 @@ def _build_rerank_prompt(query: str, snippets: list[ContextSnippet]) -> str:
     ]
     return (
         "Reordene os trechos abaixo para responder a pergunta com máxima precisão. "
+        "Selecione apenas os 3 melhores trechos. "
         'Retorne apenas JSON no formato {"selected_indexes":[i1,i2,...]} '
-        "com até 5 índices únicos.\n"
+        "com até 3 índices únicos.\n"
         f"Pergunta: {query}\n"
         f"Trechos: {json.dumps(serialized, ensure_ascii=False)}"
     )
@@ -182,7 +221,7 @@ def _extract_selected_indexes(raw_text: str, max_index: int) -> list[int]:
         if value in valid_indexes:
             continue
         valid_indexes.append(value)
-    return valid_indexes[:5]
+    return valid_indexes[:3]
 
 
 
@@ -388,7 +427,7 @@ class AgentService:
         if not snippets:
             return []
 
-        ranked_candidates = _rank_candidates(query=query, snippets=snippets)[:20]
+        ranked_candidates = _rank_candidates(query=query, snippets=snippets)[:10]
         rerank_prompt = _build_rerank_prompt(query=query, snippets=ranked_candidates)
 
         try:
@@ -409,7 +448,7 @@ class AgentService:
         except Exception:
             pass
 
-        return ranked_candidates[:5]
+        return ranked_candidates[:3]
 
     def chat(self, request: AgentChatRequest) -> AgentChatResponse:
         active_gateway = _resolve_gateway(
@@ -541,10 +580,19 @@ class AgentService:
                 query=rewritten_query,
                 top_k=20,
             )
+            hybrid_candidates = _apply_exact_keyword_boost(
+                query=request.user_message,
+                snippets=_deduplicate_snippets(lexical_snippets + vector_snippets),
+            )
+            rerank_gateway = OllamaLLMGateway(
+                base_url=self._settings.OLLAMA_BASE_URL,
+                model=self._settings.OLLAMA_MODEL or "llama3.2",
+                timeout_s=self._settings.OLLAMA_TIMEOUT_SECONDS,
+            )
             snippets = self._rerank_snippets(
                 query=rewritten_query,
-                snippets=_deduplicate_snippets(lexical_snippets + vector_snippets),
-                gateway=active_gateway,
+                snippets=hybrid_candidates,
+                gateway=rerank_gateway,
             )
             span.update(
                 output={
