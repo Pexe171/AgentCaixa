@@ -608,6 +608,49 @@ SEMANTIC_MEMORY_SUMMARY_INTERVAL=3
 4. Ajustar parâmetros (`TOP_K`, `HYBRID_ALPHA`, score mínimo).
 5. Repetir ciclo até estabilizar qualidade + latência.
 
+### 16.6 Ciclo de aprendizado automático (Ollama + Qdrant)
+
+Para o ciclo de aprendizado por ingestão vetorial (DOCX -> embedding -> Qdrant), use:
+
+```bash
+python -m rag_app.cli ingest-qdrant --input ./docs/meu_procedimento.docx
+```
+
+Esse comando executa o pipeline completo:
+
+- parse de blocos com `parser_docx.py`;
+- criação de chunks semânticos com metadados;
+- geração de vetores no Ollama (`/api/embeddings`);
+- envio para a coleção configurada em `QDRANT_COLLECTION`.
+
+Configurações relevantes no `.env`:
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=rag_app_documents
+
+INGEST_WATCH_DIR=data/inbox
+INGEST_SCANNER_STATE_PATH=data/processed/scanner_state.json
+INGEST_SCANNER_POLL_SECONDS=3
+```
+
+### 16.7 Scanner de pasta para aprender sem intervenção manual
+
+Para deixar o sistema monitorando uma pasta e ingerindo automaticamente todo novo `.docx`:
+
+```bash
+python -m rag_app.cli watch-ingest
+```
+
+Com o scanner ativo:
+
+- qualquer arquivo `.docx` novo em `INGEST_WATCH_DIR` é processado automaticamente;
+- arquivos já processados não são reprocessados sem alteração;
+- se o arquivo for alterado, ele é processado novamente;
+- o estado é salvo em `INGEST_SCANNER_STATE_PATH`.
+
 
 ## 17) Solução de problemas (troubleshooting)
 
