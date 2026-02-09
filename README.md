@@ -543,8 +543,9 @@ python -m rag_app.cli ingest --input ./docs/meu_procedimento.docx
 Esse comando:
 
 - converte o arquivo para DOCX quando necessário;
-- extrai blocos de conteúdo;
-- gera um `data/processed/blocks.jsonl` com os trechos processados.
+- extrai blocos de conteúdo com **fragmentação semântica** (respeitando fim de parágrafos/seções);
+- enriquece cada bloco com metadados (`file_name`, `created_at`, `section`);
+- gera um `data/processed/blocks.jsonl` com os trechos processados e metadados.
 
 Você pode repetir para novos documentos e versionar seu diretório `docs/` para manter histórico de conhecimento.
 
