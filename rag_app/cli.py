@@ -39,6 +39,9 @@ def ingest(input_path: Path = INPUT_OPTION) -> None:
                 "text": block.text,
                 "order": block.order,
                 "source_file": str(input_path),
+                "file_name": block.file_name,
+                "created_at": block.created_at,
+                "section": block.section,
             }
             file_handle.write(f"{json.dumps(record, ensure_ascii=False)}\n")
 

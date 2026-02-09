@@ -94,3 +94,19 @@ def test_parse_docx_to_blocks_prefers_structured_table_extractors(
 
     assert blocks[1].type == "table"
     assert blocks[1].text == "Tabela estruturada: renda | parcela"
+
+
+def test_parse_docx_to_blocks_adds_metadata_and_section_context(tmp_path: Path) -> None:
+    docx_path = tmp_path / "manual.docx"
+    doc = Document()
+    doc.add_heading("Seção de Elegibilidade", level=1)
+    doc.add_paragraph("Documento válido para operação de crédito.")
+    doc.add_paragraph("A renda mínima deve ser comprovada.")
+    doc.save(docx_path)
+
+    blocks = parse_docx_to_blocks(docx_path)
+
+    assert all(block.file_name == "manual.docx" for block in blocks)
+    assert all(block.created_at for block in blocks)
+    assert blocks[0].section == "Seção de Elegibilidade"
+    assert blocks[1].section == "Seção de Elegibilidade"

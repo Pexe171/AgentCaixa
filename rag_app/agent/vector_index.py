@@ -6,9 +6,11 @@ import hashlib
 import math
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from rag_app.agent.schemas import ContextSnippet
 from rag_app.config import AppSettings, load_settings
+from rag_app.ingest.parser_docx import Block, parse_docx_to_blocks
 
 
 @dataclass(frozen=True)
@@ -164,22 +166,68 @@ class VectorIndex:
         self.embeddings = OllamaEmbeddings(model=self._settings.OLLAMA_EMBEDDING_MODEL)
         self.index_path = os.path.join(os.getcwd(), "data", "index")
 
+    def _build_semantic_documents(self, file_path: str):
+        from langchain_core.documents import Document
+
+        blocks = parse_docx_to_blocks(Path(file_path))
+        semantic_docs: list[Document] = []
+        current_chunk: list[str] = []
+        current_meta: dict[str, str] | None = None
+        max_chars = 1800
+
+        def flush_chunk() -> None:
+            nonlocal current_chunk, current_meta
+            if not current_chunk or current_meta is None:
+                return
+            semantic_docs.append(
+                Document(
+                    page_content="\n\n".join(current_chunk),
+                    metadata=current_meta,
+                )
+            )
+            current_chunk = []
+            current_meta = None
+
+        for block in blocks:
+            metadata = self._metadata_from_block(block)
+            block_text = block.text.strip()
+            if not block_text:
+                continue
+
+            should_flush = bool(
+                current_meta
+                and (
+                    current_meta.get("section") != metadata.get("section")
+                    or len("\n\n".join(current_chunk + [block_text])) > max_chars
+                )
+            )
+            if should_flush:
+                flush_chunk()
+
+            if current_meta is None:
+                current_meta = metadata
+            current_chunk.append(block_text)
+
+        flush_chunk()
+        return semantic_docs
+
+    def _metadata_from_block(self, block: Block) -> dict[str, str]:
+        return {
+            "source_file": block.file_name,
+            "created_at": block.created_at,
+            "section": block.section,
+            "block_order": str(block.order),
+            "block_type": block.type,
+        }
+
     def ingest_file(self, file_path: str):
-        from langchain_community.document_loaders import UnstructuredWordDocumentLoader
         from langchain_community.vectorstores import FAISS
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
 
         print(f"📄 Indexando Procedimento: {os.path.basename(file_path)}")
-
-        loader = UnstructuredWordDocumentLoader(file_path)
-        documents = loader.load()
-
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1500,
-            chunk_overlap=200,
-            separators=["\n\n", "\n", "▪", "•", "."],
-        )
-        docs = text_splitter.split_documents(documents)
+        docs = self._build_semantic_documents(file_path)
+        if not docs:
+            print("⚠️ Nenhum conteúdo válido encontrado para indexação.")
+            return
 
         vectorstore = FAISS.from_documents(docs, self.embeddings)
 

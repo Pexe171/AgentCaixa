@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
@@ -30,6 +31,9 @@ class Block:
     type: Literal["paragraph", "table", "image"]
     text: str
     order: int
+    file_name: str
+    created_at: str
+    section: str
 
 
 def _normalize_text(text: str) -> str:
@@ -151,25 +155,69 @@ def _extract_structured_tables(docx_path: Path) -> list[str]:
     return []
 
 
+def _paragraph_style_name(paragraph: Paragraph) -> str:
+    try:
+        style_name = paragraph.style.name
+    except Exception:
+        return ""
+    return str(style_name or "").lower()
+
+
+def _resolve_created_at(docx_path: Path) -> str:
+    timestamp = docx_path.stat().st_ctime
+    return datetime.fromtimestamp(timestamp).isoformat(timespec="seconds")
+
+
+def _is_section_heading(paragraph: Paragraph) -> bool:
+    style_name = _paragraph_style_name(paragraph)
+    if "heading" in style_name or "título" in style_name or "titulo" in style_name:
+        return True
+    return False
+
+
 def parse_docx_to_blocks(docx_path: Path) -> list[Block]:
+    docx_path = Path(docx_path)
     doc = Document(docx_path)
     blocks: list[Block] = []
     order = 1
+    file_name = docx_path.name
+    created_at = _resolve_created_at(docx_path)
+    current_section = "Seção inicial"
     structured_tables = _extract_structured_tables(docx_path)
     structured_table_index = 0
 
     for item in _iter_block_items(doc):
         if isinstance(item, Paragraph):
             text = _normalize_text(item.text)
+            if text and _is_section_heading(item):
+                current_section = text
             if text:
-                blocks.append(Block(type="paragraph", text=text, order=order))
+                blocks.append(
+                    Block(
+                        type="paragraph",
+                        text=text,
+                        order=order,
+                        file_name=file_name,
+                        created_at=created_at,
+                        section=current_section,
+                    )
+                )
                 order += 1
 
             for rel_id in _extract_image_rel_ids(item):
                 ocr_text = _extract_ocr_text(doc, rel_id)
                 if not ocr_text:
                     continue
-                blocks.append(Block(type="image", text=ocr_text, order=order))
+                blocks.append(
+                    Block(
+                        type="image",
+                        text=ocr_text,
+                        order=order,
+                        file_name=file_name,
+                        created_at=created_at,
+                        section=current_section,
+                    )
+                )
                 order += 1
         else:
             if structured_table_index < len(structured_tables):
@@ -180,7 +228,16 @@ def parse_docx_to_blocks(docx_path: Path) -> list[Block]:
 
             if not text:
                 continue
-            blocks.append(Block(type="table", text=text, order=order))
+            blocks.append(
+                Block(
+                    type="table",
+                    text=text,
+                    order=order,
+                    file_name=file_name,
+                    created_at=created_at,
+                    section=current_section,
+                )
+            )
             order += 1
 
     return blocks
