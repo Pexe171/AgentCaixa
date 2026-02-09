@@ -11,7 +11,7 @@ Aplicação em **Python 3.11+** para execução de um agente conversacional com 
 O AgentCaixa foi desenhado para:
 
 - receber perguntas em linguagem natural;
-- recuperar contexto relevante (busca lexical + vetorial);
+- recuperar contexto relevante com busca híbrida (texto exato por palavras-chave + semântica vetorial);
 - gerar resposta estruturada em português do Brasil;
 - manter memória de interações da sessão;
 - reduzir custo com cache de embeddings e cache de respostas repetidas;
@@ -50,7 +50,7 @@ Ou seja: dá para rodar localmente sem custo de Pinecone.
 5. Faz recuperação híbrida:
    - lexical;
    - vetorial (Qdrant/FAISS/fallback local, conforme configuração).
-6. Reranqueia snippets.
+6. Faz reranking com Ollama: busca os 10 melhores candidatos e seleciona apenas os 3 trechos finais.
 7. Constrói plano de execução.
 8. Gera resposta no provedor LLM configurado.
 9. Persiste memória de sessão e memória semântica (quando aplicável).
