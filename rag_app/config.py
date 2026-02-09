@@ -45,6 +45,9 @@ class AppSettings(BaseSettings):
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = Field(default=None, repr=False)
     QDRANT_COLLECTION: str = "rag_app_documents"
+    INGEST_WATCH_DIR: str = "data/inbox"
+    INGEST_SCANNER_STATE_PATH: str = "data/processed/scanner_state.json"
+    INGEST_SCANNER_POLL_SECONDS: float = 3.0
     PINECONE_API_KEY: str | None = Field(default=None, repr=False)
     PINECONE_INDEX: str = "rag-app-index"
     PINECONE_NAMESPACE: str = "default"
@@ -103,6 +106,12 @@ class AppSettings(BaseSettings):
     def _validate_provider_timeout(cls, value: float) -> float:
         if value <= 0:
             raise ValueError("Provider timeout must be greater than 0.")
+        return value
+
+    @field_validator("INGEST_SCANNER_POLL_SECONDS")
+    def _validate_ingest_poll(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("INGEST_SCANNER_POLL_SECONDS must be greater than 0.")
         return value
 
     @field_validator(

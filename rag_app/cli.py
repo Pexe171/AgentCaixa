@@ -11,7 +11,9 @@ from rag_app.agent.schemas import AgentScanRequest
 from rag_app.agent.service import AgentService
 from rag_app.config import load_settings
 from rag_app.ingest.converters import ensure_docx
+from rag_app.ingest.folder_scanner import FolderIngestionScanner
 from rag_app.ingest.parser_docx import parse_docx_to_blocks
+from rag_app.ingest.pipeline import OllamaQdrantIngestionPipeline
 
 app = typer.Typer(help="rag_app CLI")
 INPUT_OPTION = typer.Option(..., "--input", exists=True)
@@ -46,6 +48,30 @@ def ingest(input_path: Path = INPUT_OPTION) -> None:
             file_handle.write(f"{json.dumps(record, ensure_ascii=False)}\n")
 
     typer.echo(str(output_path))
+
+
+@app.command("ingest-qdrant")
+def ingest_qdrant(input_path: Path = INPUT_OPTION) -> None:
+    """Ingere um arquivo DOCX no Qdrant usando embeddings do Ollama."""
+
+    pipeline = OllamaQdrantIngestionPipeline(settings=load_settings())
+    total = pipeline.ingest_docx(input_path)
+    typer.echo(f"{total} chunk(s) enviado(s) para o Qdrant.")
+
+
+@app.command("watch-ingest")
+def watch_ingest() -> None:
+    """Monitora a pasta de entrada e ingere .docx automaticamente."""
+
+    settings = load_settings()
+    scanner = FolderIngestionScanner(
+        watch_dir=Path(settings.INGEST_WATCH_DIR),
+        pipeline=OllamaQdrantIngestionPipeline(settings=settings),
+        state_path=Path(settings.INGEST_SCANNER_STATE_PATH),
+        poll_interval_seconds=settings.INGEST_SCANNER_POLL_SECONDS,
+    )
+    typer.echo(f"Scanner iniciado em: {Path(settings.INGEST_WATCH_DIR).resolve()}")
+    scanner.run_forever()
 
 
 @app.command("scan")
