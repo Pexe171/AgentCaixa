@@ -95,6 +95,7 @@ Ele sobe de uma vez:
 
 - `api` (FastAPI + motor de raciocínio do agente)
 - `frontend` (Streamlit)
+- `ollama` (LLM + embeddings locais)
 - `qdrant` (vetorial)
 - `redis` (cache)
 
@@ -116,7 +117,32 @@ docker compose up --build -d
 docker compose down
 ```
 
-### 5.4 Observação importante sobre o Qdrant no Docker Compose
+### 5.4 Preparação do “cérebro” de vetores (Ollama + Qdrant)
+
+O `docker-compose.yml` já está preparado para os dois pontos críticos:
+
+- **Ollama local** com volume persistente (`ollama_data`) e porta `11434`;
+- **Qdrant com persistência** por volume Docker (`qdrant_storage:/qdrant/storage`).
+
+Após subir os serviços, baixe o modelo de embedding recomendado para português:
+
+```bash
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+Opcionalmente, valide se o modelo está disponível:
+
+```bash
+docker compose exec ollama ollama list
+```
+
+Para garantir que a API use esse modelo de embedding, mantenha no `.env`:
+
+```bash
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+```
+
+### 5.5 Observação importante sobre o Qdrant no Docker Compose
 
 O `docker-compose.yml` principal não usa mais healthcheck explícito para o serviço `qdrant`.
 
@@ -165,7 +191,9 @@ Configuração local recomendada:
 
 ```bash
 LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 VECTOR_PROVIDER=qdrant
 QDRANT_URL=http://localhost:6333
 QDRANT_COLLECTION=rag_app_documents
