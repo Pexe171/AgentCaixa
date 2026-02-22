@@ -1,6 +1,6 @@
-# Assistente RAG com Feedback de Aprendizado (Fases 1 a 4)
+# Assistente RAG com Feedback de Aprendizado (Fases 1 a 5)
 
-Este projeto implementa um pipeline completo de perguntas e respostas sobre documentos `.docx`, com busca híbrida, geração com LLM local e interface de chat no Streamlit com coleta de feedback.
+Este projeto implementa um pipeline completo de perguntas e respostas sobre documentos `.docx`, com busca híbrida, geração com LLM local e interface de chat no Streamlit com coleta de feedback e avaliador em lote para validação massiva.
 
 ## Visão geral da arquitetura
 
@@ -22,6 +22,11 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
   - Para cada resposta do bot: botões **👍 Correto** e **👎 Impreciso**.
   - Salva feedback em SQLite (`feedback.db`) com data, pergunta, resposta e feedback (1/0).
   - Exibe na sidebar o **Gráfico de Aprendizado** com taxa de acerto (%) ao longo do tempo.
+- **Fase 5 — Avaliador em lote (`avaliador_em_lote.py`)**
+  - Lê `perguntas.txt` (uma pergunta por linha).
+  - Recupera contexto com `HybridRetriever` usando **Top-K=4** (padrão).
+  - Gera resposta para cada pergunta com `responder_com_ollama`.
+  - Exporta `relatorio_avaliacao.csv` com colunas para auditoria e avaliação manual.
 
 ---
 
@@ -85,6 +90,16 @@ streamlit run app.py
 
 Depois, abra no navegador o endereço mostrado pelo Streamlit (normalmente `http://localhost:8501`).
 
+### 5) Rodar avaliador em lote (Fase 5)
+
+Crie um arquivo `perguntas.txt` com uma pergunta por linha e execute:
+
+```bash
+python avaliador_em_lote.py
+```
+
+Saída padrão: `relatorio_avaliacao.csv`.
+
 ---
 
 ## Como usar o chat
@@ -120,7 +135,10 @@ Esse banco é criado automaticamente na primeira execução do `app.py`.
 - `retriever.py` — indexação e busca híbrida (vetorial + BM25)
 - `agent.py` — geração final de resposta com Ollama
 - `app.py` — interface Streamlit e coleta de feedback
+- `avaliador_em_lote.py` — execução em lote para validação e auditoria de respostas
 - `feedback.db` — banco SQLite gerado em runtime
+- `perguntas.txt` — arquivo de entrada (uma pergunta por linha) para a Fase 5
+- `relatorio_avaliacao.csv` — relatório gerado pela Fase 5
 
 ---
 
