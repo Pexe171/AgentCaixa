@@ -70,7 +70,7 @@ def responder_com_ollama(
     pergunta: str,
     modelo: str = "llama3",
     base_url: str = "http://localhost:11434",
-    timeout_s: int = 120,
+    timeout_s: int = 600,
 ) -> str:
     """Gera a resposta final usando Ollama local com temperatura fixa em 0.0."""
 
@@ -120,7 +120,7 @@ def parsear_argumentos() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fase 3: geração de resposta final com Ollama")
     parser.add_argument("--pergunta", type=str, required=True, help="Pergunta do usuário")
     parser.add_argument("--chunks-json", type=Path, help="JSON de chunks da Fase 1 para indexar")
-    parser.add_argument("--top-k", type=int, default=8, help="Quantidade de trechos recuperados")
+    parser.add_argument("--top-k", type=int, default=4, help="Quantidade de trechos recuperados")
     parser.add_argument("--modelo-llm", type=str, default="llama3", help="Modelo do Ollama para resposta")
     parser.add_argument(
         "--modelo-embedding",

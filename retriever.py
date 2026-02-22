@@ -140,7 +140,7 @@ class HybridRetriever:
     def buscar(
         self,
         pergunta: str,
-        top_k: int = 8,
+        top_k: int = 4,
         peso_bm25: float = 0.65,
         peso_vetorial: float = 0.35,
         k_rrf: int = 60,
@@ -342,7 +342,7 @@ def parsear_argumentos() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Busca híbrida com ChromaDB + BM25")
     parser.add_argument("--chunks-json", type=Path, help="Caminho para JSON de chunks da Fase 1")
     parser.add_argument("--pergunta", type=str, help="Pergunta para busca")
-    parser.add_argument("--top-k", type=int, default=8, help="Quantidade de resultados")
+    parser.add_argument("--top-k", type=int, default=4, help="Quantidade de resultados")
     parser.add_argument("--chroma-dir", type=str, default="./chroma_db", help="Diretório de persistência")
     parser.add_argument("--collection", type=str, default="documentos", help="Nome da coleção")
     parser.add_argument("--modelo", type=str, default="nomic-embed-text", help="Modelo de embedding Ollama")

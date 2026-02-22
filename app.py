@@ -131,7 +131,7 @@ def main() -> None:
         modelo_embedding = st.text_input("Modelo de embedding", value="nomic-embed-text")
         modelo_llm = st.text_input("Modelo LLM", value="llama3")
         ollama_url = st.text_input("URL do Ollama", value="http://localhost:11434")
-        top_k = st.slider("Top-K de contexto", min_value=1, max_value=15, value=8)
+        top_k = st.slider("Top-K de contexto", min_value=1, max_value=15, value=4)
 
     if "historico" not in st.session_state:
         st.session_state.historico = []
