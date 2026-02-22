@@ -122,7 +122,7 @@ Saída padrão: `relatorio_avaliacao.csv`.
 1. Abra o app com `streamlit run app.py`.
 2. Na **sidebar**, ajuste configurações como diretório do Chroma, coleção e modelos do Ollama.
 3. O campo **Top-K de contexto** inicia em `4` por padrão (para reduzir latência); diminua para `3` se quiser ainda mais velocidade.
-4. Digite sua pergunta no campo de chat.
+4. Digite sua pergunta no campo de chat. Antes da busca, o sistema aplica automaticamente Query Rewriting para transformar a pergunta em termos técnicos e melhorar a recuperação de contexto.
 5. Após cada resposta, clique em:
    - **👍 Correto** quando a resposta estiver adequada.
    - **👎 Impreciso** quando estiver incorreta ou incompleta.
