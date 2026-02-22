@@ -1,132 +1,136 @@
-# Recomeço do Projeto
+# Assistente RAG com Feedback de Aprendizado (Fases 1 a 4)
 
-## Fase 1 — Ingestão de `.docx`
+Este projeto implementa um pipeline completo de perguntas e respostas sobre documentos `.docx`, com busca híbrida, geração com LLM local e interface de chat no Streamlit com coleta de feedback.
 
-Foi adicionado o script `ingest_docx.py` para extrair texto com foco em precisão:
+## Visão geral da arquitetura
 
-- Extrai parágrafos preservando a ordem do documento.
-- Extrai tabelas linha por linha (cada linha vira um registro textual).
-- Gera chunks conservadores de **até 400 caracteres** com **overlap de 150 caracteres**.
-- Salva os chunks em JSON local temporário para auditoria.
+- **Fase 1 — Ingestão (`ingest_docx.py`)**
+  - Extrai texto de parágrafos e tabelas de arquivos `.docx`.
+  - Gera chunks conservadores (até 400 caracteres com overlap de 150).
+  - Salva os chunks em JSON para auditoria e reuso.
+- **Fase 2 — Recuperação híbrida (`retriever.py`)**
+  - Indexa chunks no ChromaDB local (persistente em disco).
+  - Usa embedding via Ollama (`nomic-embed-text` por padrão).
+  - Combina busca vetorial + BM25 com fusão RRF ponderada.
+- **Fase 3 — Resposta final (`agent.py`)**
+  - Recupera os melhores trechos via retriever híbrido.
+  - Monta prompt estrito e chama Ollama (`llama3`, temperatura 0.0).
+  - Responde apenas com base no contexto recuperado.
+- **Fase 4 — Interface (`app.py`)**
+  - Chat humanizado em Streamlit.
+  - Para cada resposta do bot: botões **👍 Correto** e **👎 Impreciso**.
+  - Salva feedback em SQLite (`feedback.db`) com data, pergunta, resposta e feedback (1/0).
+  - Exibe na sidebar o **Gráfico de Aprendizado** com taxa de acerto (%) ao longo do tempo.
 
-## Fase 2 — Busca Híbrida (`retriever.py`)
+---
 
-Foi adicionado o script `retriever.py` para busca híbrida com foco em alta precisão:
+## Pré-requisitos
 
-- Usa **ChromaDB local** para armazenamento vetorial com persistência em disco.
-- Usa embeddings via Ollama (padrão: `nomic-embed-text`).
-- Implementa **BM25** para busca lexical (útil para siglas, códigos e números de leis/documentos).
-- Faz fusão dos resultados com **RRF ponderado** (priorizando BM25 por padrão).
+- Python **3.10+**
+- Ollama instalado e em execução local
+- Pacote Python `ollama` (usado internamente pelo ChromaDB para embeddings via Ollama)
+- Modelos Ollama disponíveis:
+  - embeddings: `nomic-embed-text`
+  - geração: `llama3`
 
-
-
-## Fase 3 — Agente de Resposta Final (`agent.py`)
-
-Foi adicionado o script `agent.py` para montar a resposta final com LLM local:
-
-- Conecta ao **Ollama local** (padrão: `llama3`).
-- Usa **temperatura estritamente 0.0** para eliminar criatividade.
-- Aplica um **System Prompt rigoroso** com regra explícita para ausência de informação:
-  - `Você é um especialista analítico... [Informação não encontrada no documento]...`
-- Recebe os documentos recuperados da Fase 2 e a pergunta do usuário para gerar a resposta final.
-
-## Requisitos
-
-- Python 3.10+
-- Biblioteca `python-docx`
-- Biblioteca `chromadb`
-- Biblioteca `rank-bm25`
-- Ollama ativo localmente (para geração de embeddings)
-
-Instalação:
+Exemplo para preparar modelos no Ollama:
 
 ```bash
-pip install python-docx chromadb rank-bm25 requests
+ollama pull nomic-embed-text
+ollama pull llama3
 ```
 
-## Como usar
+---
 
-### Fase 1 — gerar chunks
+## Instalação
+
+No diretório do projeto:
 
 ```bash
-python ingest_docx.py caminho/arquivo.docx
+pip install python-docx chromadb rank-bm25 requests streamlit pandas ollama
 ```
 
-Opcionalmente, você pode definir o caminho de saída do JSON:
+---
+
+## Execução do sistema completo
+
+### 1) Gerar chunks do documento (Fase 1)
 
 ```bash
 python ingest_docx.py caminho/arquivo.docx --saida ./chunks_auditoria.json
 ```
 
-### Fase 2 — indexar chunks no ChromaDB
+### 2) Indexar chunks no ChromaDB (Fase 2)
 
 ```bash
 python retriever.py --chunks-json ./chunks_auditoria.json --limpar
 ```
 
-### Fase 2 — consultar (busca híbrida)
+### 3) (Opcional) Testar resposta via CLI (Fase 3)
 
 ```bash
-python retriever.py --pergunta "Qual é a vigência da norma X?" --top-k 8
+python agent.py --pergunta "Qual é a vigência da norma X?"
 ```
 
-### Fase 2 — indexar e consultar na mesma execução
+### 4) Subir a interface web (Fase 4)
 
 ```bash
-python retriever.py \
-  --chunks-json ./chunks_auditoria.json \
-  --pergunta "Qual o prazo do documento Y?" \
-  --top-k 8 \
-  --limpar
+streamlit run app.py
 ```
 
+Depois, abra no navegador o endereço mostrado pelo Streamlit (normalmente `http://localhost:8501`).
 
-### Fase 3 — recuperar contexto e gerar resposta final
+---
 
-```bash
-python agent.py \
-  --chunks-json ./chunks_auditoria.json \
-  --pergunta "Qual é a vigência da norma X?" \
-  --top-k 8 \
-  --modelo-llm llama3
-```
+## Como usar o chat
 
-### Fase 3 — gerar resposta usando índice já existente
+1. Abra o app com `streamlit run app.py`.
+2. Na **sidebar**, ajuste configurações como diretório do Chroma, coleção e modelos do Ollama.
+3. Digite sua pergunta no campo de chat.
+4. Após cada resposta, clique em:
+   - **👍 Correto** quando a resposta estiver adequada.
+   - **👎 Impreciso** quando estiver incorreta ou incompleta.
+5. A sidebar atualiza o **Gráfico de Aprendizado** com a taxa de acerto (%) por data.
 
-```bash
-python agent.py --pergunta "Qual é o prazo do documento Y?"
-```
+---
 
-## Saída
+## Banco de feedback (`feedback.db`)
 
-### `ingest_docx.py`
+A tabela `feedback` armazena:
 
-O script imprime:
+- `data_hora` (timestamp da avaliação)
+- `pergunta`
+- `resposta`
+- `feedback` (`1` para 👍 e `0` para 👎)
+- `message_id` (identificador único da resposta para evitar duplicidade)
 
-- total de chunks gerados;
-- caminho do arquivo JSON salvo.
+Esse banco é criado automaticamente na primeira execução do `app.py`.
 
-Formato do JSON:
+---
 
-- `total_chunks`: quantidade total;
-- `chunks`: lista com `id`, `tamanho` e `conteudo`.
+## Estrutura dos arquivos principais
 
-### `retriever.py`
+- `ingest_docx.py` — ingestão e chunking de `.docx`
+- `retriever.py` — indexação e busca híbrida (vetorial + BM25)
+- `agent.py` — geração final de resposta com Ollama
+- `app.py` — interface Streamlit e coleta de feedback
+- `feedback.db` — banco SQLite gerado em runtime
 
-Quando recebe `--pergunta`, o script imprime:
+---
 
-- ID do chunk recuperado;
-- score híbrido final;
-- score BM25 normalizado;
-- score vetorial aproximado;
-- trecho do conteúdo recuperado.
+## Solução de problemas
 
+- **Erro ao conectar no Ollama**
+  - Verifique se o Ollama está ativo e acessível em `http://localhost:11434`.
+- **Sem resultados na busca**
+  - Reindexe com `--limpar` para reconstruir a base vetorial e BM25.
+- **Gráfico de aprendizado vazio**
+  - É esperado até existir pelo menos um feedback registrado.
 
-### `agent.py`
+---
 
-Quando recebe `--pergunta`, o script:
+## Próximas evoluções recomendadas
 
-- executa a recuperação de contexto com o retriever híbrido da Fase 2;
-- envia contexto + pergunta para o Ollama com temperatura 0.0;
-- imprime a resposta final do modelo;
-- opcionalmente salva os documentos recuperados com `--salvar-contexto`.
+- Filtro por coleção/documento no chat.
+- Dashboard com distribuição de feedback por tema.
+- Exportação de feedback para CSV e rotinas de melhoria contínua do prompt.
