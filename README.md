@@ -254,3 +254,16 @@ Esse banco é criado automaticamente na primeira execução do `app.py`.
 - **Mais robusto:** validações extras no retriever híbrido (`k_rrf > 0` e ao menos um peso de busca maior que zero).
 - **Mais resiliente:** alinhamento entre documentos, IDs e metadados no BM25 para evitar inconsistências quando houver itens inválidos.
 - **Mais previsível para o usuário:** quando nenhum contexto é recuperado no chat, o sistema retorna imediatamente `[Informação não encontrada no documento]`.
+
+## Conjunto de perguntas para teste do Query Rewriter
+
+Foi adicionado o arquivo `perguntas_1000.txt` com **1.000 perguntas** (uma por linha), variando entre linguagem técnica e coloquial, cobrindo:
+
+- Renda Formal
+- Renda Informal (Grupo I e II)
+- Normativo Habitacional
+- Impedimentos
+- Documentação
+
+Use esse arquivo para testes de robustez do `query_rewriter.py` e do avaliador em lote.
+
