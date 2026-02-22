@@ -82,7 +82,7 @@ python agent.py --pergunta "Qual é a vigência da norma X?"
 
 Também é possível controlar o lote de indexação no fluxo da Fase 3 com `--lote-indexacao 50`.
 
-### 4) Subir a interface web (Fase 4)
+### 4) Subir a interface web (Fase 4 + Auditoria visual da Fase 5)
 
 ```bash
 streamlit run app.py
@@ -99,6 +99,17 @@ python avaliador_em_lote.py
 ```
 
 Saída padrão: `relatorio_avaliacao.csv`.
+
+
+### 6) Auditar manualmente o relatório no Streamlit
+
+1. Na barra lateral, selecione **Auditoria de Lote** em **Navegação**.
+2. O app carregará `relatorio_avaliacao.csv` automaticamente.
+3. Edite apenas a coluna **Avaliação Manual** usando as opções:
+   - (vazio)
+   - 👍 Correto
+   - 👎 Incorreto
+4. Clique em **Salvar Avaliações** para sobrescrever o CSV com suas marcações.
 
 ---
 
@@ -134,7 +145,7 @@ Esse banco é criado automaticamente na primeira execução do `app.py`.
 - `ingest_docx.py` — ingestão e chunking de `.docx`
 - `retriever.py` — indexação e busca híbrida (vetorial + BM25)
 - `agent.py` — geração final de resposta com Ollama
-- `app.py` — interface Streamlit e coleta de feedback
+- `app.py` — interface Streamlit com dois modos: **Chatbot** e **Auditoria de Lote**, incluindo edição/salvamento da coluna `Avaliação Manual` no CSV
 - `avaliador_em_lote.py` — execução em lote para validação e auditoria de respostas
 - `feedback.db` — banco SQLite gerado em runtime
 - `perguntas.txt` — arquivo de entrada (uma pergunta por linha) para a Fase 5
