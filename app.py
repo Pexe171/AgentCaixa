@@ -1,4 +1,4 @@
-"""Fase 4: Interface Streamlit com chat humanizado e coleta de feedback."""
+"""Fase 5: Interface Streamlit com chat e auditoria de lote."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from agent import ErroOllama, responder_com_ollama
 from retriever import HybridRetriever
 
 DB_PATH = Path("feedback.db")
+RELATORIO_AVALIACAO_PATH = Path("relatorio_avaliacao.csv")
+OPCOES_AVALIACAO_MANUAL = ["", "👍 Correto", "👎 Incorreto"]
 
 
 def inicializar_banco() -> None:
@@ -100,30 +102,29 @@ def gerar_resposta(pergunta: str, retriever: HybridRetriever, top_k: int, modelo
     )
 
 
-def renderizar_sidebar() -> None:
-    """Exibe o painel lateral com evolução de aprendizado."""
+def renderizar_sidebar() -> str:
+    """Exibe opções globais na sidebar e retorna a tela selecionada."""
+
+    modo = st.sidebar.radio("Navegação", options=["Chatbot", "Auditoria de Lote"], index=0)
 
     st.sidebar.header("Gráfico de Aprendizado")
     consolidado = carregar_aprendizado()
 
     if consolidado.empty:
         st.sidebar.info("Ainda não há feedbacks registrados.")
-        return
+    else:
+        taxa_media = consolidado["taxa_acerto"].mean()
+        st.sidebar.metric("Taxa média de acerto", f"{taxa_media:.1f}%")
+        st.sidebar.line_chart(consolidado.set_index("data")["taxa_acerto"])
 
-    taxa_media = consolidado["taxa_acerto"].mean()
-    st.sidebar.metric("Taxa média de acerto", f"{taxa_media:.1f}%")
-    st.sidebar.line_chart(consolidado.set_index("data")["taxa_acerto"])
+    return modo
 
 
-def main() -> None:
-    """UI principal do chat em Streamlit."""
+def renderizar_chatbot() -> None:
+    """Renderiza a interface de chat e coleta de feedbacks."""
 
-    st.set_page_config(page_title="Assistente de Documentos", page_icon="💬", layout="wide")
     st.title("💬 Assistente de Documentos")
     st.caption("Chat humanizado com feedback contínuo para evolução da qualidade das respostas.")
-
-    inicializar_banco()
-    renderizar_sidebar()
 
     with st.sidebar.expander("Configurações", expanded=True):
         chroma_dir = st.text_input("Diretório ChromaDB", value="./chroma_db")
@@ -211,6 +212,66 @@ def main() -> None:
                     st.warning("Feedback negativo registrado.")
             with col3:
                 st.caption("Marque 👍 ou 👎 para alimentar o gráfico de aprendizado.")
+
+
+def renderizar_auditoria_lote() -> None:
+    """Renderiza a tela de auditoria manual do relatório em lote."""
+
+    st.title("🧪 Auditoria de Lote")
+    st.caption("Revise respostas do relatório e registre a avaliação manual de cada linha.")
+
+    if not RELATORIO_AVALIACAO_PATH.exists():
+        st.warning(
+            "O arquivo `relatorio_avaliacao.csv` ainda não foi encontrado. "
+            "Rode `python avaliador_em_lote.py` para gerar o relatório e volte aqui."
+        )
+        return
+
+    df = pd.read_csv(RELATORIO_AVALIACAO_PATH)
+
+    if "Avaliação Manual" not in df.columns:
+        df["Avaliação Manual"] = ""
+
+    df["Avaliação Manual"] = df["Avaliação Manual"].fillna("")
+    df["Avaliação Manual"] = df["Avaliação Manual"].where(
+        df["Avaliação Manual"].isin(OPCOES_AVALIACAO_MANUAL),
+        "",
+    )
+
+    colunas_bloqueadas = [coluna for coluna in df.columns if coluna != "Avaliação Manual"]
+
+    df_editado = st.data_editor(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        disabled=colunas_bloqueadas,
+        column_config={
+            "Avaliação Manual": st.column_config.SelectboxColumn(
+                "Avaliação Manual",
+                help="Classifique cada resposta do assistente.",
+                options=OPCOES_AVALIACAO_MANUAL,
+                required=False,
+            )
+        },
+    )
+
+    if st.button("Salvar Avaliações", type="primary"):
+        df_editado.to_csv(RELATORIO_AVALIACAO_PATH, index=False)
+        st.success("Avaliações salvas com sucesso em `relatorio_avaliacao.csv`.")
+
+
+def main() -> None:
+    """UI principal do chat e da auditoria em Streamlit."""
+
+    st.set_page_config(page_title="Assistente de Documentos", page_icon="💬", layout="wide")
+
+    inicializar_banco()
+    modo = renderizar_sidebar()
+
+    if modo == "Chatbot":
+        renderizar_chatbot()
+    else:
+        renderizar_auditoria_lote()
 
 
 if __name__ == "__main__":
