@@ -21,6 +21,8 @@ from openai import OpenAIError
 
 from query_rewriter import expandir_pergunta
 
+load_dotenv()
+
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 PROMPT_PADRAO_HABITACIONAL = "especialista_habitacional.txt"
 PROMPT_FALLBACK_HABITACIONAL = (
@@ -42,18 +44,6 @@ class ErroOpenAI(RuntimeError):
 
 class ErroGemini(RuntimeError):
     """Erro de integração com Google Gemini."""
-
-
-_dotenv_carregado = False
-
-
-def _carregar_variaveis_ambiente() -> None:
-    """Carrega variáveis do `.env` apenas uma vez por processo."""
-
-    global _dotenv_carregado
-    if not _dotenv_carregado:
-        load_dotenv()
-        _dotenv_carregado = True
 
 
 def carregar_prompt(nome_arquivo: str) -> str:
@@ -171,10 +161,9 @@ def responder_com_openai(
     if not pergunta or not pergunta.strip():
         raise ValueError("A pergunta do usuário não pode ser vazia.")
 
-    _carregar_variaveis_ambiente()
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
-        raise ErroOpenAI("OPENAI_API_KEY não encontrada. Configure a chave no ambiente ou no arquivo .env.")
+        raise ErroOpenAI("Erro: Chave OPENAI não configurada no arquivo .env")
 
     contexto = montar_contexto(documentos)
     prompt_sistema = carregar_prompt(prompt_sistema_arquivo)
@@ -232,10 +221,9 @@ def responder_com_gemini(
     if not pergunta or not pergunta.strip():
         raise ValueError("A pergunta do usuário não pode ser vazia.")
 
-    _carregar_variaveis_ambiente()
     api_key = os.getenv("GOOGLE_API_KEY", "").strip()
     if not api_key:
-        raise ErroGemini("GOOGLE_API_KEY não encontrada. Configure a chave no ambiente ou no arquivo .env.")
+        raise ErroGemini("Erro: Chave GEMINI não configurada no arquivo .env")
 
     contexto = montar_contexto(documentos)
     prompt_sistema = carregar_prompt(prompt_sistema_arquivo)

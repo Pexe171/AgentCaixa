@@ -8,6 +8,7 @@ e salva um relatório CSV para auditoria.
 from __future__ import annotations
 
 import argparse
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from threading import Lock
 from typing import Any
 
 import pandas as pd
+from dotenv import load_dotenv
 
 from agent import ErroGemini, ErroOllama, ErroOpenAI, gerar_resposta_hibrida
 from query_rewriter import expandir_pergunta
@@ -152,6 +154,16 @@ def avaliar_em_lote(
     return linhas_relatorio
 
 
+def _validar_configuracao_provedor(provedor: str) -> None:
+    """Valida pré-requisitos de ambiente antes de iniciar o lote."""
+
+    if provedor == "openai" and not os.getenv("OPENAI_API_KEY", "").strip():
+        raise RuntimeError("Erro: Chave OPENAI não configurada no arquivo .env")
+
+    if provedor == "gemini" and not os.getenv("GOOGLE_API_KEY", "").strip():
+        raise RuntimeError("Erro: Chave GEMINI não configurada no arquivo .env")
+
+
 def parsear_argumentos() -> argparse.Namespace:
     """Define argumentos da CLI do avaliador em lote."""
 
@@ -198,7 +210,9 @@ def parsear_argumentos() -> argparse.Namespace:
 def main() -> None:
     """Ponto de entrada da Fase 5 (avaliação em lote)."""
 
+    load_dotenv()
     args = parsear_argumentos()
+    _validar_configuracao_provedor(args.provedor)
     perguntas = ler_perguntas(args.arquivo_perguntas)
 
     retriever = HybridRetriever(

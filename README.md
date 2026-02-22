@@ -63,7 +63,8 @@ OPENAI_API_KEY=sua_chave_openai_aqui
 GOOGLE_API_KEY=sua_chave_google_ai_studio_aqui
 ```
 
-> O carregamento do `.env` é automático nas integrações cloud do sistema (OpenAI/Gemini).
+> O carregamento do `.env` é automático no `agent.py` e no `avaliador_em_lote.py` para integrações cloud (OpenAI/Gemini).
+> Se a chave estiver ausente/vazia, o sistema interrompe com mensagem clara sem expor segredo: `Erro: Chave OPENAI não configurada no arquivo .env` ou `Erro: Chave GEMINI não configurada no arquivo .env`.
 
 ### 4) Executar avaliador em lote por provedor
 
