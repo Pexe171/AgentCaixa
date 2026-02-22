@@ -94,6 +94,9 @@ def gerar_resposta(pergunta: str, retriever: HybridRetriever, top_k: int, modelo
 
     pergunta_tecnica = expandir_pergunta(pergunta)
     documentos = retriever.buscar(pergunta_tecnica, top_k=top_k)
+    if not documentos:
+        return "[Informação não encontrada no documento]"
+
     documentos_dict = [asdict(item) for item in documentos]
 
     return responder_com_ollama(

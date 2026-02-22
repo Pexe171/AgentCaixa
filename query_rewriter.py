@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -34,16 +35,14 @@ def carregar_prompt(nome_arquivo: str) -> str:
         return PROMPT_REESCRITA_FALLBACK
 
 
-def expandir_pergunta(pergunta_usuario: str) -> str:
-    """Reescreve a pergunta do usuário com termos técnicos via Ollama.
+@lru_cache(maxsize=512)
+def _expandir_pergunta_cached(pergunta_normalizada: str) -> str:
+    """Executa a chamada ao Ollama e faz cache por pergunta normalizada."""
 
-    Em caso de timeout, indisponibilidade do serviço ou resposta inválida,
-    retorna a pergunta original como fallback seguro.
-    """
     payload: dict[str, Any] = {
         "model": MODELO_REESCRITA,
         "system": carregar_prompt(PROMPT_REESCRITA_PADRAO),
-        "prompt": pergunta_usuario,
+        "prompt": pergunta_normalizada,
         "stream": False,
     }
 
@@ -56,7 +55,20 @@ def expandir_pergunta(pergunta_usuario: str) -> str:
         resposta.raise_for_status()
         corpo: dict[str, Any] = resposta.json()
     except (requests.RequestException, ValueError):
-        return pergunta_usuario
+        return pergunta_normalizada
 
     pergunta_expandida: str = str(corpo.get("response", "")).strip()
-    return pergunta_expandida or pergunta_usuario
+    return pergunta_expandida or pergunta_normalizada
+
+
+def expandir_pergunta(pergunta_usuario: str) -> str:
+    """Reescreve a pergunta do usuário com termos técnicos via Ollama.
+
+    Em caso de timeout, indisponibilidade do serviço ou resposta inválida,
+    retorna a pergunta original como fallback seguro.
+    """
+    pergunta_normalizada = pergunta_usuario.strip()
+    if not pergunta_normalizada:
+        return pergunta_usuario
+
+    return _expandir_pergunta_cached(pergunta_normalizada)

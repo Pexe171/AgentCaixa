@@ -30,6 +30,7 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
   - Exporta `relatorio_avaliacao.csv` com colunas para auditoria e avaliação manual.
 - **Fase 6 — Query Rewriting (`query_rewriter.py`)**
   - Reescreve perguntas coloquiais para uma versão técnica focada em normas habitacionais da Caixa, usando prompt externo `prompts/reescritor_tecnico.txt`.
+  - Mantém cache em memória das perguntas reescritas para reduzir latência e chamadas repetidas ao Ollama.
   - Usa chamada rápida ao endpoint `http://localhost:11434/api/generate` com `requests` e timeout de 10s.
   - Em caso de erro/timeout, retorna a pergunta original como fallback seguro.
 
@@ -191,3 +192,12 @@ Esse banco é criado automaticamente na primeira execução do `app.py`.
 - Filtro por coleção/documento no chat.
 - Dashboard com distribuição de feedback por tema.
 - Exportação de feedback para CSV e rotinas de melhoria contínua do prompt.
+
+---
+
+## Melhorias recentes de inteligência, performance e robustez
+
+- **Mais rápido:** adicionado cache de Query Rewriting para perguntas repetidas, evitando chamadas redundantes ao Ollama.
+- **Mais robusto:** validações extras no retriever híbrido (`k_rrf > 0` e ao menos um peso de busca maior que zero).
+- **Mais resiliente:** alinhamento entre documentos, IDs e metadados no BM25 para evitar inconsistências quando houver itens inválidos.
+- **Mais previsível para o usuário:** quando nenhum contexto é recuperado no chat, o sistema retorna imediatamente `[Informação não encontrada no documento]`.

@@ -159,6 +159,10 @@ class HybridRetriever:
             raise ValueError("top_k deve ser maior que zero.")
         if peso_bm25 < 0 or peso_vetorial < 0:
             raise ValueError("Os pesos não podem ser negativos.")
+        if peso_bm25 == 0 and peso_vetorial == 0:
+            raise ValueError("Ao menos um dos pesos (BM25 ou vetorial) deve ser maior que zero.")
+        if k_rrf <= 0:
+            raise ValueError("k_rrf deve ser maior que zero.")
 
         if self._bm25 is None:
             self._reconstruir_bm25()
@@ -199,9 +203,18 @@ class HybridRetriever:
         ids = dados.get("ids") or []
         metadados = dados.get("metadatas") or []
 
-        self._bm25_docs = [doc for doc in documentos if isinstance(doc, str)]
-        self._bm25_ids = [str(doc_id) for doc_id in ids]
-        self._bm25_metas = metadados if isinstance(metadados, list) else [{} for _ in self._bm25_docs]
+        itens_validos: list[tuple[str, str, dict[str, Any]]] = []
+        for i, documento in enumerate(documentos):
+            if not isinstance(documento, str):
+                continue
+
+            item_id = str(ids[i]) if i < len(ids) else f"doc-{i}"
+            item_meta = metadados[i] if i < len(metadados) and isinstance(metadados[i], dict) else {}
+            itens_validos.append((item_id, documento, item_meta))
+
+        self._bm25_ids = [item_id for item_id, _, _ in itens_validos]
+        self._bm25_docs = [conteudo for _, conteudo, _ in itens_validos]
+        self._bm25_metas = [meta for _, _, meta in itens_validos]
 
         if not self._bm25_docs:
             self._bm25 = None
