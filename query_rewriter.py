@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -9,14 +10,28 @@ import requests
 OLLAMA_URL: str = "http://localhost:11434/api/generate"
 MODELO_REESCRITA: str = "llama3"
 TIMEOUT_SEGUNDOS: int = 10
-SYSTEM_PROMPT_REESCRITA: str = (
+PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+PROMPT_REESCRITA_PADRAO = "reescritor_tecnico.txt"
+PROMPT_REESCRITA_FALLBACK: str = (
     "Você é um especialista em normas habitacionais da Caixa Econômica Federal. "
-    "O usuário fará uma pergunta coloquial. Sua tarefa é reescrever essa pergunta usando "
-    "termos técnicos bancários (ex: trocar \"quem pode comprar\" por \"público-alvo, "
-    "proponente, exigências e impedimentos\", trocar \"MCMV\" por \"PMCMV\", "
-    "trocar \"renda\" por \"capacidade de pagamento e avaliação de risco\"). "
-    "Responda APENAS com a pergunta reescrita, sem introduções ou explicações."
+    "Reescreva a pergunta do usuário com termos técnicos bancários e habitacionais, "
+    "preservando a intenção original. "
+    "Responda APENAS com a pergunta reescrita, sem explicações."
 )
+
+
+def carregar_prompt(nome_arquivo: str) -> str:
+    """Carrega um prompt da pasta `prompts/` com fallback seguro."""
+
+    caminho_prompt = PROMPTS_DIR / nome_arquivo
+    try:
+        return caminho_prompt.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        print(f"Aviso: prompt não encontrado em '{caminho_prompt}'. Usando fallback de reescrita.")
+        return PROMPT_REESCRITA_FALLBACK
+    except OSError as erro:
+        print(f"Aviso: falha ao ler prompt '{caminho_prompt}': {erro}. Usando fallback de reescrita.")
+        return PROMPT_REESCRITA_FALLBACK
 
 
 def expandir_pergunta(pergunta_usuario: str) -> str:
@@ -27,7 +42,7 @@ def expandir_pergunta(pergunta_usuario: str) -> str:
     """
     payload: dict[str, Any] = {
         "model": MODELO_REESCRITA,
-        "system": SYSTEM_PROMPT_REESCRITA,
+        "system": carregar_prompt(PROMPT_REESCRITA_PADRAO),
         "prompt": pergunta_usuario,
         "stream": False,
     }

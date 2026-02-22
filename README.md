@@ -15,8 +15,9 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
   - Combina busca vetorial + BM25 com fusão RRF ponderada.
 - **Fase 3 — Resposta final (`agent.py`)**
   - Recupera os melhores trechos via retriever híbrido.
-  - Monta prompt estrito e chama Ollama (`llama3`, temperatura 0.0) com timeout padrão de 600 segundos.
-  - Responde apenas com base no contexto recuperado.
+  - Carrega o prompt de sistema a partir de ficheiros externos em `prompts/` (padrão: `especialista_habitacional.txt`).
+  - Permite trocar o especialista via argumento `--prompt-sistema`.
+  - Chama Ollama (`llama3`, temperatura 0.0) com timeout padrão de 600 segundos e responde apenas com base no contexto recuperado.
 - **Fase 4 — Interface (`app.py`)**
   - Chat humanizado em Streamlit.
   - Para cada resposta do bot: botões **👍 Correto** e **👎 Impreciso**.
@@ -28,7 +29,7 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
   - Gera resposta para cada pergunta com `responder_com_ollama`.
   - Exporta `relatorio_avaliacao.csv` com colunas para auditoria e avaliação manual.
 - **Fase 6 — Query Rewriting (`query_rewriter.py`)**
-  - Reescreve perguntas coloquiais para uma versão técnica focada em normas habitacionais da Caixa.
+  - Reescreve perguntas coloquiais para uma versão técnica focada em normas habitacionais da Caixa, usando prompt externo `prompts/reescritor_tecnico.txt`.
   - Usa chamada rápida ao endpoint `http://localhost:11434/api/generate` com `requests` e timeout de 10s.
   - Em caso de erro/timeout, retorna a pergunta original como fallback seguro.
 
@@ -117,6 +118,21 @@ Saída padrão: `relatorio_avaliacao.csv`.
 
 ---
 
+
+### Prompts externos especializados
+
+A pasta `prompts/` centraliza os prompts de sistema e elimina textos fixos no código Python:
+
+- `especialista_habitacional.txt` (padrão da Fase 3)
+- `especialista_renda.txt`
+- `reescritor_tecnico.txt` (Fase 6)
+
+Para trocar o especialista na geração final (Fase 3), use:
+
+```bash
+python agent.py --pergunta "Minha pergunta" --prompt-sistema especialista_renda.txt
+```
+
 ## Como usar o chat
 
 1. Abra o app com `streamlit run app.py`.
@@ -148,10 +164,11 @@ Esse banco é criado automaticamente na primeira execução do `app.py`.
 
 - `ingest_docx.py` — ingestão e chunking de `.docx`
 - `retriever.py` — indexação e busca híbrida (vetorial + BM25)
-- `agent.py` — geração final de resposta com Ollama
+- `agent.py` — geração final de resposta com Ollama e carregamento de prompt externo
 - `app.py` — interface Streamlit com dois modos: **Chatbot** e **Auditoria de Lote**, incluindo edição/salvamento da coluna `Avaliação Manual` no CSV
 - `avaliador_em_lote.py` — execução em lote para validação e auditoria de respostas
-- `query_rewriter.py` — reescrita técnica de perguntas (Query Rewriting) antes da busca
+- `query_rewriter.py` — reescrita técnica de perguntas com prompt externo (Query Rewriting)
+- `prompts/` — prompts de sistema especializados por domínio
 - `feedback.db` — banco SQLite gerado em runtime
 - `perguntas.txt` — arquivo de entrada (uma pergunta por linha) para a Fase 5
 - `relatorio_avaliacao.csv` — relatório gerado pela Fase 5

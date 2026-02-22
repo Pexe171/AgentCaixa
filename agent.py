@@ -16,8 +16,10 @@ import requests
 
 from query_rewriter import expandir_pergunta
 
-SYSTEM_PROMPT_ESTRITO = (
-    "Você é um especialista analítico. "
+PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+PROMPT_PADRAO_HABITACIONAL = "especialista_habitacional.txt"
+PROMPT_FALLBACK_HABITACIONAL = (
+    "Você é um especialista em crédito imobiliário habitacional da CAIXA. "
     "Responda APENAS com base no contexto fornecido. "
     "Se a resposta não estiver no contexto, diga EXATAMENTE: "
     "[Informação não encontrada no documento]. "
@@ -27,6 +29,20 @@ SYSTEM_PROMPT_ESTRITO = (
 
 class ErroOllama(RuntimeError):
     """Erro de integração com Ollama."""
+
+
+def carregar_prompt(nome_arquivo: str) -> str:
+    """Carrega um prompt da pasta `prompts/` com fallback resiliente."""
+
+    caminho_prompt = PROMPTS_DIR / nome_arquivo
+    try:
+        return caminho_prompt.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        print(f"Aviso: prompt não encontrado em '{caminho_prompt}'. Usando fallback padrão.")
+        return PROMPT_FALLBACK_HABITACIONAL
+    except OSError as erro:
+        print(f"Aviso: falha ao ler prompt '{caminho_prompt}': {erro}. Usando fallback padrão.")
+        return PROMPT_FALLBACK_HABITACIONAL
 
 
 def _normalizar_documento(documento: Any, indice: int) -> str:
@@ -73,6 +89,7 @@ def responder_com_ollama(
     modelo: str = "llama3",
     base_url: str = "http://localhost:11434",
     timeout_s: int = 600,
+    prompt_sistema_arquivo: str = PROMPT_PADRAO_HABITACIONAL,
 ) -> str:
     """Gera a resposta final usando Ollama local com temperatura fixa em 0.0."""
 
@@ -80,6 +97,7 @@ def responder_com_ollama(
         raise ValueError("A pergunta do usuário não pode ser vazia.")
 
     contexto = montar_contexto(documentos)
+    prompt_sistema = carregar_prompt(prompt_sistema_arquivo)
 
     mensagem_usuario = (
         "Contexto:\n"
@@ -93,7 +111,7 @@ def responder_com_ollama(
         "stream": False,
         "options": {"temperature": 0.0},
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT_ESTRITO},
+            {"role": "system", "content": prompt_sistema},
             {"role": "user", "content": mensagem_usuario},
         ],
     }
@@ -141,6 +159,12 @@ def parsear_argumentos() -> argparse.Namespace:
     parser.add_argument("--ollama-url", type=str, default="http://localhost:11434", help="URL base do Ollama")
     parser.add_argument("--limpar", action="store_true", help="Limpa coleção antes de indexar chunks")
     parser.add_argument(
+        "--prompt-sistema",
+        type=str,
+        default=PROMPT_PADRAO_HABITACIONAL,
+        help="Arquivo de prompt em prompts/ para instruções do especialista",
+    )
+    parser.add_argument(
         "--salvar-contexto",
         type=Path,
         default=None,
@@ -183,6 +207,7 @@ def main() -> None:
         pergunta=args.pergunta,
         modelo=args.modelo_llm,
         base_url=args.ollama_url,
+        prompt_sistema_arquivo=args.prompt_sistema,
     )
 
     print("\n=== Resposta Final ===\n")
