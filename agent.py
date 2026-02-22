@@ -14,6 +14,8 @@ from typing import Any
 
 import requests
 
+from query_rewriter import expandir_pergunta
+
 SYSTEM_PROMPT_ESTRITO = (
     "Você é um especialista analítico. "
     "Responda APENAS com base no contexto fornecido. "
@@ -165,7 +167,8 @@ def main() -> None:
         retriever.carregar_chunks_do_json(args.chunks_json, limpar_colecao=args.limpar)
         print(f"Chunks indexados com sucesso na coleção '{args.collection}'.")
 
-    documentos = retriever.buscar(args.pergunta, top_k=args.top_k)
+    pergunta_tecnica = expandir_pergunta(args.pergunta)
+    documentos = retriever.buscar(pergunta_tecnica, top_k=args.top_k)
 
     if args.salvar_contexto is not None:
         serializado = [asdict(item) for item in documentos]

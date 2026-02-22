@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 
 from agent import ErroOllama, responder_com_ollama
+from query_rewriter import expandir_pergunta
 from retriever import HybridRetriever
 
 DB_PATH = Path("feedback.db")
@@ -91,7 +92,8 @@ def obter_retriever(chroma_dir: str, collection_name: str, modelo_embedding: str
 def gerar_resposta(pergunta: str, retriever: HybridRetriever, top_k: int, modelo_llm: str, ollama_url: str) -> str:
     """Executa pipeline de recuperação + resposta final."""
 
-    documentos = retriever.buscar(pergunta, top_k=top_k)
+    pergunta_tecnica = expandir_pergunta(pergunta)
+    documentos = retriever.buscar(pergunta_tecnica, top_k=top_k)
     documentos_dict = [asdict(item) for item in documentos]
 
     return responder_com_ollama(
