@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import requests
+from dotenv import load_dotenv
+from openai import APIConnectionError, APITimeoutError, OpenAI
+from openai import OpenAIError
 
 OLLAMA_URL: str = "http://localhost:11434/api/generate"
-MODELO_REESCRITA: str = "llama3"
+MODELO_REESCRITA_LOCAL: str = "llama3"
+MODELO_REESCRITA_OPENAI: str = "gpt-4o-mini"
 TIMEOUT_SEGUNDOS: int = 10
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 PROMPT_REESCRITA_PADRAO = "reescritor_tecnico.txt"
@@ -19,6 +24,18 @@ PROMPT_REESCRITA_FALLBACK: str = (
     "preservando a intenção original. "
     "Responda APENAS com a pergunta reescrita, sem explicações."
 )
+
+
+_dotenv_carregado = False
+
+
+def _carregar_variaveis_ambiente() -> None:
+    """Carrega variáveis do `.env` uma única vez por processo."""
+
+    global _dotenv_carregado
+    if not _dotenv_carregado:
+        load_dotenv()
+        _dotenv_carregado = True
 
 
 def carregar_prompt(nome_arquivo: str) -> str:
@@ -36,11 +53,11 @@ def carregar_prompt(nome_arquivo: str) -> str:
 
 
 @lru_cache(maxsize=512)
-def _expandir_pergunta_cached(pergunta_normalizada: str) -> str:
+def _expandir_pergunta_local_cached(pergunta_normalizada: str) -> str:
     """Executa a chamada ao Ollama e faz cache por pergunta normalizada."""
 
     payload: dict[str, Any] = {
-        "model": MODELO_REESCRITA,
+        "model": MODELO_REESCRITA_LOCAL,
         "system": carregar_prompt(PROMPT_REESCRITA_PADRAO),
         "prompt": pergunta_normalizada,
         "stream": False,
@@ -61,14 +78,49 @@ def _expandir_pergunta_cached(pergunta_normalizada: str) -> str:
     return pergunta_expandida or pergunta_normalizada
 
 
-def expandir_pergunta(pergunta_usuario: str) -> str:
-    """Reescreve a pergunta do usuário com termos técnicos via Ollama.
+@lru_cache(maxsize=512)
+def _expandir_pergunta_openai_cached(pergunta_normalizada: str, modelo: str) -> str:
+    """Executa a reescrita com OpenAI e cache por pergunta+modelo."""
+
+    _carregar_variaveis_ambiente()
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return pergunta_normalizada
+
+    cliente = OpenAI(api_key=api_key, timeout=TIMEOUT_SEGUNDOS)
+
+    try:
+        resposta = cliente.chat.completions.create(
+            model=modelo,
+            temperature=0.0,
+            messages=[
+                {"role": "system", "content": carregar_prompt(PROMPT_REESCRITA_PADRAO)},
+                {"role": "user", "content": pergunta_normalizada},
+            ],
+        )
+    except (APIConnectionError, APITimeoutError, OpenAIError):
+        return pergunta_normalizada
+
+    texto = (resposta.choices[0].message.content or "").strip() if resposta.choices else ""
+    return texto or pergunta_normalizada
+
+
+def expandir_pergunta(
+    pergunta_usuario: str,
+    provedor: str = "local",
+    modelo_openai: str = MODELO_REESCRITA_OPENAI,
+) -> str:
+    """Reescreve a pergunta com termos técnicos usando provedor local ou OpenAI.
 
     Em caso de timeout, indisponibilidade do serviço ou resposta inválida,
     retorna a pergunta original como fallback seguro.
     """
+
     pergunta_normalizada = pergunta_usuario.strip()
     if not pergunta_normalizada:
         return pergunta_usuario
 
-    return _expandir_pergunta_cached(pergunta_normalizada)
+    if provedor == "openai":
+        return _expandir_pergunta_openai_cached(pergunta_normalizada, modelo_openai)
+
+    return _expandir_pergunta_local_cached(pergunta_normalizada)

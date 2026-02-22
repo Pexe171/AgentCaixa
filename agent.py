@@ -8,11 +8,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
 import requests
+from dotenv import load_dotenv
+from openai import APIConnectionError, APITimeoutError, OpenAI
+from openai import OpenAIError
 
 from query_rewriter import expandir_pergunta
 
@@ -29,6 +33,22 @@ PROMPT_FALLBACK_HABITACIONAL = (
 
 class ErroOllama(RuntimeError):
     """Erro de integração com Ollama."""
+
+
+class ErroOpenAI(RuntimeError):
+    """Erro de integração com OpenAI."""
+
+
+_dotenv_carregado = False
+
+
+def _carregar_variaveis_ambiente() -> None:
+    """Carrega variáveis do `.env` apenas uma vez por processo."""
+
+    global _dotenv_carregado
+    if not _dotenv_carregado:
+        load_dotenv()
+        _dotenv_carregado = True
 
 
 def carregar_prompt(nome_arquivo: str) -> str:
@@ -132,6 +152,56 @@ def responder_com_ollama(
         raise ErroOllama("Ollama retornou uma resposta vazia.")
 
     return resposta_modelo.strip()
+
+
+def responder_com_openai(
+    documentos: list[Any],
+    pergunta: str,
+    modelo: str = "gpt-4o-mini",
+    timeout_s: int = 60,
+    prompt_sistema_arquivo: str = PROMPT_PADRAO_HABITACIONAL,
+) -> str:
+    """Gera a resposta final usando OpenAI com prompt externo da pasta `prompts/`."""
+
+    if not pergunta or not pergunta.strip():
+        raise ValueError("A pergunta do usuário não pode ser vazia.")
+
+    _carregar_variaveis_ambiente()
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise ErroOpenAI("OPENAI_API_KEY não encontrada. Configure a chave no ambiente ou no arquivo .env.")
+
+    contexto = montar_contexto(documentos)
+    prompt_sistema = carregar_prompt(prompt_sistema_arquivo)
+
+    mensagem_usuario = (
+        "Contexto:\n"
+        f"{contexto if contexto else '[Sem contexto recuperado]'}\n\n"
+        "Pergunta do usuário:\n"
+        f"{pergunta.strip()}"
+    )
+
+    cliente = OpenAI(api_key=api_key, timeout=timeout_s)
+
+    try:
+        resposta = cliente.chat.completions.create(
+            model=modelo,
+            temperature=0.0,
+            messages=[
+                {"role": "system", "content": prompt_sistema},
+                {"role": "user", "content": mensagem_usuario},
+            ],
+        )
+    except (APIConnectionError, APITimeoutError) as exc:
+        raise ErroOpenAI(f"Falha de conexão/timeout com OpenAI: {exc}") from exc
+    except OpenAIError as exc:
+        raise ErroOpenAI(f"Falha ao consultar OpenAI: {exc}") from exc
+
+    conteudo = (resposta.choices[0].message.content or "").strip() if resposta.choices else ""
+    if not conteudo:
+        raise ErroOpenAI("OpenAI retornou uma resposta vazia.")
+
+    return conteudo
 
 
 def parsear_argumentos() -> argparse.Namespace:
