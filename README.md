@@ -10,6 +10,7 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
   - Salva os chunks em JSON para auditoria e reuso.
 - **Fase 2 — Recuperação híbrida (`retriever.py`)**
   - Indexa chunks no ChromaDB local (persistente em disco).
+  - Realiza indexação em lotes de 50 chunks para reduzir timeout no embedding via Ollama.
   - Usa embedding via Ollama (`nomic-embed-text` por padrão).
   - Combina busca vetorial + BM25 com fusão RRF ponderada.
 - **Fase 3 — Resposta final (`agent.py`)**
@@ -66,11 +67,15 @@ python ingest_docx.py caminho/arquivo.docx --saida ./chunks_auditoria.json
 python retriever.py --chunks-json ./chunks_auditoria.json --limpar
 ```
 
+> Dica: ajuste o tamanho de lote de indexação (padrão 50) com `--lote-indexacao` quando precisar otimizar estabilidade de embeddings.
+
 ### 3) (Opcional) Testar resposta via CLI (Fase 3)
 
 ```bash
 python agent.py --pergunta "Qual é a vigência da norma X?"
 ```
+
+Também é possível controlar o lote de indexação no fluxo da Fase 3 com `--lote-indexacao 50`.
 
 ### 4) Subir a interface web (Fase 4)
 
