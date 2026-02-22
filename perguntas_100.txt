@@ -1,0 +1,99 @@
+Qual o valor mínimo da renda para avaliação de risco de crédito comercial?
+O Auxílio Emergencial pode ser utilizado para comprovação de renda?
+Qual a validade exigida para o contracheque utilizado na comprovação de renda?
+O pró-labore com distribuição de lucros é aceito como comprovante de renda?
+O pró-labore é aceito para Microempreendedor Individual (MEI)?
+Como deve ser procedido quando o contracheque apresenta mais de uma rubrica de imposto de renda retido referente a adiantamento?
+Um contracheque que apresenta somente verbas de auxílio moradia e alimentação é aceito?
+Quantos contracheques são necessários para compor o Histórico de Contracheque?
+Como é calculada a renda mensal a partir do Extrato de FGTS?
+Qual o prazo mínimo de aplicação exigido para extratos de outras Instituições Financeiras?
+Como é calculado o rendimento de poupança quando o extrato não apresenta o rendimento do mês?
+Como deve ser cadastrada a renda de previdência privada durante o período de diferimento?
+Valores referentes a 13º salário podem ser somados ao valor do benefício do INSS para cálculo de renda?
+O auxílio-doença comum (espécie 31) é considerado como renda formal para o Crédito Consignado?
+Para o Extrato de conta salário/aposentadoria, quantos meses devem ser considerados e qual a regra de descarte?
+A Declaração do Empregador é aceita para quais clientes e em que tipo de avaliação?
+Qual é o prazo de validade da Declaração do Empregador após a data da posse?
+Quais documentos devem acompanhar o contrato de aluguel para comprovação de renda?
+O contrato de aluguel é aceito se possuir mais de um locador?
+Como é calculada a renda mensal para o produtor rural baseada em notas fiscais de vendas?
+Qual é o limite máximo de notas fiscais utilizadas para comprovação de renda rural?
+A Declaração de Imposto de Renda original entregue após 30 dias do prazo final é aceita?
+Como são tratados os rendimentos de cônjuges na Declaração Conjunta de Imposto de Renda?
+O que acontece se a DIRPF apresentar rendimentos descontinuados?
+Onde são obtidos os rendimentos de pessoa jurídica na DIRPF?
+Como se calcula a renda quando o produtor rural possui valor positivo no Resultado Tributável, mas menor que o limite de 20%?
+É permitida a utilização de pensão alimentícia de menor de idade para lastrear operação de crédito?
+Bolsas de estudo Pronatec são consideradas rendimentos aceitos na apuração de renda?
+Indenizações por rescisão de contrato de trabalho ou PDV são aceitas como rendimento na DIRPF?
+O que caracteriza a Renda Informal em relação à documentação?
+Qual o limite máximo de comprometimento de renda permitido na prestação habitacional?
+Qual a defasagem média de atualização das informações do SCR?
+O que deve ser feito se a avaliação de risco for condicionada por capacidade de pagamento?
+Clientes com contrato ativo de crédito consignado do Programa Auxílio Brasil (PAB) podem contratar operações comerciais?
+Qual é o prazo de validade das avaliações comerciais e habitacionais?
+Qual é o limite de solicitações de avaliação de risco comercial em 30 dias?
+Quais atividades se enquadram no Grupo I de Renda Informal?
+Qual a característica financeira dos bens produzidos por profissionais do Grupo I?
+Cite 3 ocupações consideradas como Classe 1 (Renda Formal).
+Como se caracteriza o Grupo II de renda informal em relação à escolaridade?
+Taxista faz parte de qual grupo de renda informal?
+Podólogo pertence a qual grupo de renda informal?
+Quais dados compõem a Proposta de Financiamento Habitacional?
+Quais registros do CADIN são restritivos apenas para operações habitacionais lastreadas com recursos públicos?
+Qual documento o cliente deve emitir no BCB para comprovar pagamento de dívida vencida no SCR?
+Como o CCA deve proceder se houver suspeita de lavagem de dinheiro durante a entrevista com o cliente?
+O parceiro CCA pode informar o cliente de que ele está sendo investigado por lavagem de dinheiro?
+Quais alterações no cadastro do cliente impedem novas avaliações comerciais?
+Quais são as espécies de benefícios do INSS que não são aceitas para crédito consignado?
+A modalidade de Construção em Terreno Próprio é permitida para Pessoa Jurídica?
+Pode haver contratação de unidades com características de empreendimento de forma isolada?
+Qual a exigência para o estrangeiro figurar como tomador de crédito imobiliário?
+O proponente pode ser sócio da construtora que está vendendo o imóvel na planta?
+Um imóvel pode ser misto (residencial e comercial) nas operações de SFH?
+O FGTS pode ser utilizado para pagar a parte comercial de um imóvel misto?
+O que é exigido para imóveis sob regime de enfiteuse ou aforamento?
+O que deve ser apresentado se o imóvel novo for no Distrito Federal ou no Entorno do DF?
+É permitida a doação de imóvel financiado na CAIXA por vontade das partes?
+Um proponente que possua 40% de fração ideal de um imóvel residencial pode participar do PMCMV?
+Um nu-proprietário de imóvel recebido por doação pode contratar financiamento habitacional?
+O que acontece se houver divergência de destinação do imóvel entre a matrícula e o IPTU?
+Imóveis com habite-se parcial são aceitos pela CAIXA?
+É obrigatória a contratação de qual seguro para a modalidade Aquisição de Imóvel Novo no PMCMV?
+Quais são as duas coberturas adicionais exigidas na apólice de Seguro RCPM?
+Para operações do Programa Pró-cotista, qual o tempo mínimo de trabalho sob o regime do FGTS exigido?
+Como é comprovada a execução da obra no SBPE com antecipação de recursos?
+Qual o prazo máximo de construção para contratos do FGTS e SBPE?
+O que ocorre se a diferença entre o percentual acumulado aferido e o previsto no cronograma de obras for superior a 10 pontos percentuais?
+É permitido o financiamento de obra executada na modalidade de Reforma?
+Qual é o limite máximo de obra executada admitido para contratação nas modalidades de construção?
+Pode-se financiar piscina e churrasqueira com recursos do SBPE?
+O que é o Licenciamento de Obra Declaratório e quando ele é aceito?
+Quais são as consequências se o devedor não concluir a obra no prazo estabelecido?
+Como é calculada a parcela de amortização no sistema PRICE?
+Como é feita a apuração de quota máxima para Aquisição de Terreno e Construção no SIRIC?
+Qual o prazo de carência permitido para o estado de calamidade no Rio Grande do Sul?
+Durante o período de carência calamidade, quais parcelas o devedor continua pagando?
+O que é a Cessão de Direitos Creditórios do FGTS Futuro e quem pode utilizar?
+O desconto do FGTS é concedido integralmente se houver apenas 1 proponente sem dependentes?
+Como o CCA verifica se o cliente possui subsídios impeditivos concedidos anteriormente?
+Em quais modalidades é permitida a operação com Interveniente Quitante?
+Pode-se liquidar um contrato com Interveniente Quitante em uma operação de Construção em Terreno Próprio antes do término da obra?
+Quais assinaturas eletrônicas são aceitas para a assinatura de minutas contratuais?
+Quais apontamentos no CONRES são impeditivos para a contratação?
+A pesquisa no SIJUR é obrigatória para quais tipos de propostas?
+Como é descaracterizada a família unipessoal no PMCMV no caso de união estável?
+Como comprovar que a residência atual do proponente é no mesmo município do imóvel, caso ele não possua contas em seu nome?
+Quando é cobrada a Tarifa de Avaliação de Bens Recebidos em Garantia?
+Quando a Tarifa de Reavaliação de Bens Recebidos em Garantia é debitada na fase de construção do SBPE?
+Se o cliente possui o regime de comunhão parcial de bens e o imóvel foi adquirido antes do casamento, como o cônjuge assina no contrato de venda?
+O que deve ser feito se o Cartório de Imóveis se recusar a registrar um contrato de um imóvel que possua área não averbada?
+Como funciona o Registro Eletrônico de contrato e quem pode solicitar?
+Para onde os recursos da liberação de um terreno na modalidade Aquisição de Terreno e Construção devem ser creditados?
+O que é a Conformidade Proativa e quando ela ocorre?
+Qual o prazo para o CCA encaminhar o dossiê físico para a Agência após o parecer conforme da CEOPF?
+Quem é o responsável pela verificação da conformidade de propostas com valor superior a dois milhões de reais?
+Até quando o cliente pode solicitar o cancelamento da proposta no SIOPI?
+Como o cliente é notificado do descumprimento contratual por atraso no cronograma físico-financeiro?
+O que deve ser feito caso a apólice de Seguro RCPM seja para um alvará emitido a partir de 03 JAN 2022?
