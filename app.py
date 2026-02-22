@@ -11,13 +11,18 @@ from uuid import uuid4
 import pandas as pd
 import streamlit as st
 
-from agent import ErroOllama, ErroOpenAI, responder_com_ollama, responder_com_openai
+from agent import ErroGemini, ErroOllama, ErroOpenAI, gerar_resposta_hibrida
 from query_rewriter import expandir_pergunta
 from retriever import HybridRetriever
 
 DB_PATH = Path("feedback.db")
 RELATORIO_AVALIACAO_PATH = Path("relatorio_avaliacao.csv")
 OPCOES_AVALIACAO_MANUAL = ["", "👍 Correto", "👎 Incorreto"]
+MODELOS_POR_PROVEDOR = {
+    "ollama": ["llama3", "mistral", "qwen2.5"],
+    "openai": ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
+    "gemini": ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"],
+}
 
 
 def inicializar_banco() -> None:
@@ -107,18 +112,12 @@ def gerar_resposta(
 
     documentos_dict = [asdict(item) for item in documentos]
 
-    if provedor == "openai":
-        return responder_com_openai(
-            documentos=documentos_dict,
-            pergunta=pergunta,
-            modelo=modelo_llm,
-        )
-
-    return responder_com_ollama(
+    return gerar_resposta_hibrida(
+        provedor=provedor,
         documentos=documentos_dict,
         pergunta=pergunta,
         modelo=modelo_llm,
-        base_url=ollama_url,
+        ollama_url=ollama_url,
     )
 
 
@@ -150,17 +149,17 @@ def renderizar_chatbot() -> None:
         chroma_dir = st.text_input("Diretório ChromaDB", value="./chroma_db")
         collection_name = st.text_input("Coleção", value="documentos")
         modelo_embedding = st.text_input("Modelo de embedding", value="nomic-embed-text")
-        provedor_ui = st.radio(
-            "Provedor de inferência",
-            options=["Local (Ollama)", "Cloud (OpenAI)"],
+        provedor = st.selectbox(
+            "Provedor de IA",
+            options=["ollama", "openai", "gemini"],
             index=0,
+            format_func=lambda valor: {"ollama": "Ollama", "openai": "OpenAI", "gemini": "Gemini"}[valor],
         )
-        if provedor_ui == "Cloud (OpenAI)":
+        if provedor in {"openai", "gemini"}:
             st.warning("Custo por token ativo")
 
-        provedor = "openai" if provedor_ui == "Cloud (OpenAI)" else "local"
-        modelo_padrao = "gpt-4o-mini" if provedor == "openai" else "llama3"
-        modelo_llm = st.text_input("Modelo LLM", value=modelo_padrao)
+        modelos_disponiveis = MODELOS_POR_PROVEDOR[provedor]
+        modelo_llm = st.selectbox("Modelo LLM", options=modelos_disponiveis, index=0)
         ollama_url = st.text_input("URL do Ollama", value="http://localhost:11434")
         top_k = st.slider("Top-K de contexto", min_value=1, max_value=15, value=4)
 
@@ -206,7 +205,7 @@ def renderizar_chatbot() -> None:
             with st.spinner("Analisando contexto e gerando resposta..."):
                 try:
                     resposta = gerar_resposta(pergunta, retriever, top_k, modelo_llm, ollama_url, provedor)
-                except (ValueError, ErroOllama, ErroOpenAI, RuntimeError) as erro:
+                except (ValueError, ErroOllama, ErroOpenAI, ErroGemini, RuntimeError) as erro:
                     resposta = f"Não foi possível gerar a resposta agora: {erro}"
 
             st.markdown(resposta)

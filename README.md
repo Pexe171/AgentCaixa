@@ -1,6 +1,6 @@
 # Assistente RAG com Feedback de Aprendizado (Fases 1 a 6)
 
-Este projeto implementa um pipeline completo de perguntas e respostas sobre documentos `.docx`, com busca híbrida, geração com LLM local, reescrita de perguntas para melhorar recuperação no banco vetorial, interface de chat no Streamlit com coleta de feedback e avaliador em lote para validação massiva.
+Este projeto implementa um pipeline completo de perguntas e respostas sobre documentos `.docx`, com busca híbrida, geração Multi-LLM (Ollama, OpenAI e Gemini), reescrita de perguntas para melhorar recuperação no banco vetorial, interface de chat no Streamlit com coleta de feedback e avaliador em lote para validação massiva.
 
 ## Visão geral da arquitetura
 
@@ -17,7 +17,7 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
   - Recupera os melhores trechos via retriever híbrido.
   - Carrega o prompt de sistema a partir de ficheiros externos em `prompts/` (padrão: `especialista_habitacional.txt`).
   - Permite trocar o especialista via argumento `--prompt-sistema`.
-  - Chama Ollama (`llama3`, temperatura 0.0) com timeout padrão de 600 segundos e responde apenas com base no contexto recuperado.
+  - Suporta arquitetura híbrida com `Ollama`, `OpenAI` e `Google Gemini`, sempre com temperatura 0.0 e prompts externos em `prompts/`.
 - **Fase 4 — Interface (`app.py`)**
   - Chat humanizado em Streamlit.
   - Para cada resposta do bot: botões **👍 Correto** e **👎 Impreciso**.
@@ -26,8 +26,9 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
 - **Fase 5 — Avaliador em lote (`avaliador_em_lote.py`)**
   - Lê `perguntas.txt` (uma pergunta por linha).
   - Recupera contexto com `HybridRetriever` usando **Top-K=4** (padrão).
-  - Gera resposta para cada pergunta com `responder_com_ollama`.
-  - Exporta `relatorio_avaliacao.csv` com colunas para auditoria e avaliação manual.
+  - Gera resposta para cada pergunta com roteamento automático por provedor (`gerar_resposta_hibrida`).
+  - Para OpenAI e Gemini, usa paralelismo por threads para acelerar a geração do Relatório de Ouro.
+  - Exporta CSV com colunas para auditoria e avaliação manual.
 - **Fase 6 — Query Rewriting (`query_rewriter.py`)**
   - Reescreve perguntas coloquiais para uma versão técnica focada em normas habitacionais da Caixa, usando prompt externo `prompts/reescritor_tecnico.txt`.
   - Mantém cache em memória das perguntas reescritas para reduzir latência e chamadas repetidas ao Ollama.
@@ -37,15 +38,45 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
 ---
 
 
-### Configuração de ambiente (.env)
+## 🛠️ Configuração de Motores de IA
 
-Para habilitar modo cloud com OpenAI, crie um arquivo `.env` na raiz do projeto:
+O AgentCaixa agora suporta três provedores de geração: **Ollama (local)**, **OpenAI** e **Google Gemini**.
+
+### 1) Obter chave da OpenAI
+
+1. Acesse o painel da OpenAI.
+2. Gere uma API key em **API Keys**.
+3. Copie a chave para uso no `.env`.
+
+### 2) Obter chave do Google AI Studio (Gemini)
+
+1. Acesse o Google AI Studio.
+2. Crie uma API key para a API Gemini.
+3. Copie a chave para uso no `.env`.
+
+### 3) Configurar o arquivo `.env`
+
+Na raiz do projeto, crie (ou edite) o arquivo `.env` com as duas chaves:
 
 ```bash
-OPENAI_API_KEY=sua_chave_aqui
+OPENAI_API_KEY=sua_chave_openai_aqui
+GOOGLE_API_KEY=sua_chave_google_ai_studio_aqui
 ```
 
-> O sistema carrega automaticamente o `.env` ao usar OpenAI no `agent.py` e no `query_rewriter.py`.
+> O carregamento do `.env` é automático nas integrações cloud do sistema (OpenAI/Gemini).
+
+### 4) Executar avaliador em lote por provedor
+
+```bash
+# Ollama (local)
+python avaliador_em_lote.py --provedor local --modelo-llm llama3
+
+# OpenAI (Relatório de Ouro com threads)
+python avaliador_em_lote.py --provedor openai --threads 50 --modelo-llm gpt-4o-mini
+
+# Gemini (Relatório de Ouro com threads)
+python avaliador_em_lote.py --provedor gemini --threads 50 --modelo-llm gemini-1.5-flash
+```
 
 ## Pré-requisitos
 
@@ -70,7 +101,7 @@ ollama pull llama3
 No diretório do projeto:
 
 ```bash
-pip install python-docx chromadb rank-bm25 requests streamlit pandas ollama openai python-dotenv
+pip install python-docx chromadb rank-bm25 requests streamlit pandas ollama openai google-generativeai python-dotenv
 ```
 
 ---
@@ -157,14 +188,15 @@ python agent.py --pergunta "Minha pergunta" --prompt-sistema especialista_renda.
 
 1. Abra o app com `streamlit run app.py`.
 2. Na **sidebar**, ajuste configurações como diretório do Chroma, coleção e modelos.
-3. Selecione o **Provedor de inferência** em `Local (Ollama)` (padrão) ou `Cloud (OpenAI)`.
-4. Quando `Cloud (OpenAI)` estiver ativo, o app exibirá o aviso **Custo por token ativo**.
-5. O campo **Top-K de contexto** inicia em `4` por padrão (para reduzir latência); diminua para `3` se quiser ainda mais velocidade.
-6. Digite sua pergunta no campo de chat. Antes da busca, o sistema aplica automaticamente Query Rewriting com o mesmo provedor selecionado (local/cloud), melhorando a recuperação de contexto.
-7. Após cada resposta, clique em:
+3. Selecione o **Provedor de IA** em `Ollama`, `OpenAI` ou `Gemini`.
+4. O app atualiza dinamicamente a lista de **Modelo LLM** conforme o provedor escolhido.
+5. Quando `OpenAI` ou `Gemini` estiver ativo, o app exibirá o aviso **Custo por token ativo**.
+6. O campo **Top-K de contexto** inicia em `4` por padrão (para reduzir latência); diminua para `3` se quiser ainda mais velocidade.
+7. Digite sua pergunta no campo de chat. Antes da busca, o sistema aplica automaticamente Query Rewriting para melhorar a recuperação de contexto.
+8. Após cada resposta, clique em:
    - **👍 Correto** quando a resposta estiver adequada.
    - **👎 Impreciso** quando estiver incorreta ou incompleta.
-6. A sidebar atualiza o **Gráfico de Aprendizado** com a taxa de acerto (%) por data.
+9. A sidebar atualiza o **Gráfico de Aprendizado** com a taxa de acerto (%) por data.
 
 ---
 
@@ -186,9 +218,9 @@ Esse banco é criado automaticamente na primeira execução do `app.py`.
 
 - `ingest_docx.py` — ingestão e chunking de `.docx`
 - `retriever.py` — indexação e busca híbrida (vetorial + BM25)
-- `agent.py` — geração final de resposta com Ollama e carregamento de prompt externo
+- `agent.py` — geração final com roteamento híbrido entre Ollama, OpenAI e Gemini, com carregamento de prompt externo
 - `app.py` — interface Streamlit com dois modos: **Chatbot** e **Auditoria de Lote**, incluindo edição/salvamento da coluna `Avaliação Manual` no CSV
-- `avaliador_em_lote.py` — execução em lote para validação e auditoria de respostas
+- `avaliador_em_lote.py` — execução em lote para validação e auditoria de respostas (inclui modo concorrente para OpenAI/Gemini)
 - `query_rewriter.py` — reescrita técnica de perguntas com prompt externo (Query Rewriting)
 - `prompts/` — prompts de sistema especializados por domínio
 - `feedback.db` — banco SQLite gerado em runtime
