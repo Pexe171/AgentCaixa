@@ -130,6 +130,12 @@ def parsear_argumentos() -> argparse.Namespace:
     )
     parser.add_argument("--chroma-dir", type=str, default="./chroma_db", help="Diretório do ChromaDB")
     parser.add_argument("--collection", type=str, default="documentos", help="Coleção do ChromaDB")
+    parser.add_argument(
+        "--lote-indexacao",
+        type=int,
+        default=50,
+        help="Quantidade de chunks por lote durante indexação no ChromaDB",
+    )
     parser.add_argument("--ollama-url", type=str, default="http://localhost:11434", help="URL base do Ollama")
     parser.add_argument("--limpar", action="store_true", help="Limpa coleção antes de indexar chunks")
     parser.add_argument(
@@ -152,6 +158,7 @@ def main() -> None:
         chroma_dir=args.chroma_dir,
         collection_name=args.collection,
         ollama_model=args.modelo_embedding,
+        lote_indexacao=args.lote_indexacao,
     )
 
     if args.chunks_json:

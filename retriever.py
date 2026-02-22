@@ -47,12 +47,17 @@ class HybridRetriever:
         chroma_dir: str = "./chroma_db",
         collection_name: str = "documentos",
         ollama_model: str = "nomic-embed-text",
+        lote_indexacao: int = 50,
         bm25_k1: float = 1.5,
         bm25_b: float = 0.75,
     ) -> None:
         self.chroma_dir = chroma_dir
         self.collection_name = collection_name
         self.ollama_model = ollama_model
+        self.lote_indexacao = lote_indexacao
+
+        if self.lote_indexacao <= 0:
+            raise ValueError("lote_indexacao deve ser maior que zero.")
 
         self._chroma_client = chromadb.PersistentClient(path=chroma_dir)
         self._embedding_function = OllamaEmbeddingFunction(model_name=ollama_model)
@@ -108,8 +113,19 @@ class HybridRetriever:
         if limpar_colecao:
             self._recriar_colecao()
 
-        self._collection.upsert(ids=ids, documents=documentos, metadatas=metadados)
+        self._upsert_em_lotes(ids=ids, documentos=documentos, metadados=metadados)
         self._reconstruir_bm25()
+
+    def _upsert_em_lotes(self, ids: list[str], documentos: list[str], metadados: list[dict[str, Any]]) -> None:
+        """Indexa chunks em lotes para reduzir timeout no embedding do Ollama."""
+
+        for inicio in range(0, len(ids), self.lote_indexacao):
+            fim = inicio + self.lote_indexacao
+            self._collection.upsert(
+                ids=ids[inicio:fim],
+                documents=documentos[inicio:fim],
+                metadatas=metadados[inicio:fim],
+            )
 
     def carregar_chunks_do_json(self, caminho_json: Path, limpar_colecao: bool = False) -> None:
         """Carrega chunks no formato da Fase 1 e indexa no sistema híbrido."""
@@ -331,6 +347,12 @@ def parsear_argumentos() -> argparse.Namespace:
     parser.add_argument("--collection", type=str, default="documentos", help="Nome da coleção")
     parser.add_argument("--modelo", type=str, default="nomic-embed-text", help="Modelo de embedding Ollama")
     parser.add_argument(
+        "--lote-indexacao",
+        type=int,
+        default=50,
+        help="Quantidade de chunks por lote na indexação para evitar timeout no embedding",
+    )
+    parser.add_argument(
         "--limpar",
         action="store_true",
         help="Limpa e recria a coleção antes de indexar",
@@ -346,6 +368,7 @@ def main() -> None:
         chroma_dir=args.chroma_dir,
         collection_name=args.collection,
         ollama_model=args.modelo,
+        lote_indexacao=args.lote_indexacao,
     )
 
     if args.chunks_json:
