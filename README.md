@@ -1,6 +1,6 @@
-# Assistente RAG com Feedback de Aprendizado (Fases 1 a 5)
+# Assistente RAG com Feedback de Aprendizado (Fases 1 a 6)
 
-Este projeto implementa um pipeline completo de perguntas e respostas sobre documentos `.docx`, com busca híbrida, geração com LLM local e interface de chat no Streamlit com coleta de feedback e avaliador em lote para validação massiva.
+Este projeto implementa um pipeline completo de perguntas e respostas sobre documentos `.docx`, com busca híbrida, geração com LLM local, reescrita de perguntas para melhorar recuperação no banco vetorial, interface de chat no Streamlit com coleta de feedback e avaliador em lote para validação massiva.
 
 ## Visão geral da arquitetura
 
@@ -27,6 +27,10 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
   - Recupera contexto com `HybridRetriever` usando **Top-K=4** (padrão).
   - Gera resposta para cada pergunta com `responder_com_ollama`.
   - Exporta `relatorio_avaliacao.csv` com colunas para auditoria e avaliação manual.
+- **Fase 6 — Query Rewriting (`query_rewriter.py`)**
+  - Reescreve perguntas coloquiais para uma versão técnica focada em normas habitacionais da Caixa.
+  - Usa chamada rápida ao endpoint `http://localhost:11434/api/generate` com `requests` e timeout de 10s.
+  - Em caso de erro/timeout, retorna a pergunta original como fallback seguro.
 
 ---
 
@@ -147,6 +151,7 @@ Esse banco é criado automaticamente na primeira execução do `app.py`.
 - `agent.py` — geração final de resposta com Ollama
 - `app.py` — interface Streamlit com dois modos: **Chatbot** e **Auditoria de Lote**, incluindo edição/salvamento da coluna `Avaliação Manual` no CSV
 - `avaliador_em_lote.py` — execução em lote para validação e auditoria de respostas
+- `query_rewriter.py` — reescrita técnica de perguntas (Query Rewriting) antes da busca
 - `feedback.db` — banco SQLite gerado em runtime
 - `perguntas.txt` — arquivo de entrada (uma pergunta por linha) para a Fase 5
 - `relatorio_avaliacao.csv` — relatório gerado pela Fase 5
