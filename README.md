@@ -15,7 +15,7 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
   - Combina busca vetorial + BM25 com fusão RRF ponderada.
 - **Fase 3 — Resposta final (`agent.py`)**
   - Recupera os melhores trechos via retriever híbrido.
-  - Monta prompt estrito e chama Ollama (`llama3`, temperatura 0.0).
+  - Monta prompt estrito e chama Ollama (`llama3`, temperatura 0.0) com timeout padrão de 600 segundos.
   - Responde apenas com base no contexto recuperado.
 - **Fase 4 — Interface (`app.py`)**
   - Chat humanizado em Streamlit.
@@ -91,11 +91,12 @@ Depois, abra no navegador o endereço mostrado pelo Streamlit (normalmente `http
 
 1. Abra o app com `streamlit run app.py`.
 2. Na **sidebar**, ajuste configurações como diretório do Chroma, coleção e modelos do Ollama.
-3. Digite sua pergunta no campo de chat.
-4. Após cada resposta, clique em:
+3. O campo **Top-K de contexto** inicia em `4` por padrão (para reduzir latência); diminua para `3` se quiser ainda mais velocidade.
+4. Digite sua pergunta no campo de chat.
+5. Após cada resposta, clique em:
    - **👍 Correto** quando a resposta estiver adequada.
    - **👎 Impreciso** quando estiver incorreta ou incompleta.
-5. A sidebar atualiza o **Gráfico de Aprendizado** com a taxa de acerto (%) por data.
+6. A sidebar atualiza o **Gráfico de Aprendizado** com a taxa de acerto (%) por data.
 
 ---
 
