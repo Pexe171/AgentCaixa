@@ -18,6 +18,18 @@ Foi adicionado o script `retriever.py` para busca híbrida com foco em alta prec
 - Implementa **BM25** para busca lexical (útil para siglas, códigos e números de leis/documentos).
 - Faz fusão dos resultados com **RRF ponderado** (priorizando BM25 por padrão).
 
+
+
+## Fase 3 — Agente de Resposta Final (`agent.py`)
+
+Foi adicionado o script `agent.py` para montar a resposta final com LLM local:
+
+- Conecta ao **Ollama local** (padrão: `llama3`).
+- Usa **temperatura estritamente 0.0** para eliminar criatividade.
+- Aplica um **System Prompt rigoroso** com regra explícita para ausência de informação:
+  - `Você é um especialista analítico... [Informação não encontrada no documento]...`
+- Recebe os documentos recuperados da Fase 2 e a pergunta do usuário para gerar a resposta final.
+
 ## Requisitos
 
 - Python 3.10+
@@ -29,7 +41,7 @@ Foi adicionado o script `retriever.py` para busca híbrida com foco em alta prec
 Instalação:
 
 ```bash
-pip install python-docx chromadb rank-bm25
+pip install python-docx chromadb rank-bm25 requests
 ```
 
 ## Como usar
@@ -68,6 +80,23 @@ python retriever.py \
   --limpar
 ```
 
+
+### Fase 3 — recuperar contexto e gerar resposta final
+
+```bash
+python agent.py \
+  --chunks-json ./chunks_auditoria.json \
+  --pergunta "Qual é a vigência da norma X?" \
+  --top-k 8 \
+  --modelo-llm llama3
+```
+
+### Fase 3 — gerar resposta usando índice já existente
+
+```bash
+python agent.py --pergunta "Qual é o prazo do documento Y?"
+```
+
 ## Saída
 
 ### `ingest_docx.py`
@@ -91,3 +120,13 @@ Quando recebe `--pergunta`, o script imprime:
 - score BM25 normalizado;
 - score vetorial aproximado;
 - trecho do conteúdo recuperado.
+
+
+### `agent.py`
+
+Quando recebe `--pergunta`, o script:
+
+- executa a recuperação de contexto com o retriever híbrido da Fase 2;
+- envia contexto + pergunta para o Ollama com temperatura 0.0;
+- imprime a resposta final do modelo;
+- opcionalmente salva os documentos recuperados com `--salvar-contexto`.
