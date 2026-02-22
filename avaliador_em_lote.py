@@ -1,7 +1,7 @@
 """Fase 5: avaliador em lote para perguntas e respostas com RAG.
 
 Lê perguntas de um arquivo texto, recupera contexto com o retriever híbrido
-(Top-K=4 por padrão), consulta provedor local (Ollama) ou cloud (OpenAI)
+(Top-K=4 por padrão), consulta provedor local (Ollama) ou cloud (OpenAI/Gemini)
 e salva um relatório CSV para auditoria.
 """
 
@@ -16,7 +16,7 @@ from typing import Any
 
 import pandas as pd
 
-from agent import ErroOllama, ErroOpenAI, responder_com_ollama, responder_com_openai
+from agent import ErroGemini, ErroOllama, ErroOpenAI, gerar_resposta_hibrida
 from query_rewriter import expandir_pergunta
 from retriever import HybridRetriever, ResultadoBusca
 
@@ -76,20 +76,14 @@ def _responder_com_tolerancia(
     trecho_resumo = resumir_trechos(documentos)
 
     try:
-        if provedor == "openai":
-            resposta = responder_com_openai(
-                documentos=documentos,
-                pergunta=pergunta,
-                modelo=modelo_llm,
-            )
-        else:
-            resposta = responder_com_ollama(
-                documentos=documentos,
-                pergunta=pergunta,
-                modelo=modelo_llm,
-                base_url=ollama_url,
-            )
-    except (ValueError, ErroOllama, ErroOpenAI, RuntimeError) as erro:
+        resposta = gerar_resposta_hibrida(
+            provedor=provedor,
+            documentos=documentos,
+            pergunta=pergunta,
+            modelo=modelo_llm,
+            ollama_url=ollama_url,
+        )
+    except (ValueError, ErroOllama, ErroOpenAI, ErroGemini, RuntimeError) as erro:
         resposta = f"[Falha ao gerar resposta: {erro}]"
 
     return {
@@ -114,7 +108,7 @@ def avaliar_em_lote(
 
     total = len(perguntas)
 
-    if provedor == "openai":
+    if provedor in {"openai", "gemini"}:
         resultados_por_indice: dict[int, dict[str, Any]] = {}
         concluidas = 0
 
@@ -137,7 +131,7 @@ def avaliar_em_lote(
                 resultados_por_indice[indice] = futuro.result()
                 concluidas += 1
                 with _LOCK_LOG:
-                    print(f"Progresso OpenAI: {concluidas}/{total} perguntas processadas.")
+                    print(f"Progresso {provedor.capitalize()}: {concluidas}/{total} perguntas processadas.")
 
         return [resultados_por_indice[i] for i in range(total)]
 
@@ -188,15 +182,15 @@ def parsear_argumentos() -> argparse.Namespace:
     parser.add_argument(
         "--provedor",
         type=str,
-        choices=["local", "openai"],
+        choices=["local", "openai", "gemini"],
         default="local",
-        help="Provedor de geração: local (Ollama) ou openai",
+        help="Provedor de geração: local (Ollama), openai ou gemini",
     )
     parser.add_argument(
         "--threads",
         type=int,
         default=50,
-        help="Total de threads para modo OpenAI (padrão: 50)",
+        help="Total de threads para provedores cloud (OpenAI/Gemini) (padrão: 50)",
     )
     return parser.parse_args()
 
@@ -213,7 +207,12 @@ def main() -> None:
         ollama_model=args.modelo_embedding,
     )
 
-    saida_padrao = Path("relatorio_ouro_openai.csv") if args.provedor == "openai" else Path("relatorio_avaliacao.csv")
+    if args.provedor == "openai":
+        saida_padrao = Path("relatorio_ouro_openai.csv")
+    elif args.provedor == "gemini":
+        saida_padrao = Path("relatorio_ouro_gemini.csv")
+    else:
+        saida_padrao = Path("relatorio_avaliacao.csv")
     saida_csv = args.saida_csv or saida_padrao
 
     linhas_relatorio = avaliar_em_lote(

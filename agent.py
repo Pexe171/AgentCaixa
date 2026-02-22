@@ -13,6 +13,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
+import google.generativeai as genai
 import requests
 from dotenv import load_dotenv
 from openai import APIConnectionError, APITimeoutError, OpenAI
@@ -37,6 +38,10 @@ class ErroOllama(RuntimeError):
 
 class ErroOpenAI(RuntimeError):
     """Erro de integração com OpenAI."""
+
+
+class ErroGemini(RuntimeError):
+    """Erro de integração com Google Gemini."""
 
 
 _dotenv_carregado = False
@@ -202,6 +207,103 @@ def responder_com_openai(
         raise ErroOpenAI("OpenAI retornou uma resposta vazia.")
 
     return conteudo
+
+
+def _montar_mensagem_usuario(contexto: str, pergunta: str) -> str:
+    """Monta o bloco de entrada padrão para os provedores de geração."""
+
+    return (
+        "Contexto:\n"
+        f"{contexto if contexto else '[Sem contexto recuperado]'}\n\n"
+        "Pergunta do usuário:\n"
+        f"{pergunta.strip()}"
+    )
+
+
+def responder_com_gemini(
+    documentos: list[Any],
+    pergunta: str,
+    modelo: str = "gemini-1.5-flash",
+    timeout_s: int = 60,
+    prompt_sistema_arquivo: str = PROMPT_PADRAO_HABITACIONAL,
+) -> str:
+    """Gera a resposta final usando Google Gemini com temperatura fixa em 0.0."""
+
+    if not pergunta or not pergunta.strip():
+        raise ValueError("A pergunta do usuário não pode ser vazia.")
+
+    _carregar_variaveis_ambiente()
+    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    if not api_key:
+        raise ErroGemini("GOOGLE_API_KEY não encontrada. Configure a chave no ambiente ou no arquivo .env.")
+
+    contexto = montar_contexto(documentos)
+    prompt_sistema = carregar_prompt(prompt_sistema_arquivo)
+    mensagem_usuario = _montar_mensagem_usuario(contexto, pergunta)
+
+    try:
+        genai.configure(api_key=api_key)
+        modelo_gemini = genai.GenerativeModel(
+            model_name=modelo,
+            system_instruction=prompt_sistema,
+            generation_config={"temperature": 0.0},
+        )
+        resposta = modelo_gemini.generate_content(
+            mensagem_usuario,
+            request_options={"timeout": timeout_s},
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise ErroGemini(f"Falha ao consultar Gemini: {exc}") from exc
+
+    conteudo = (getattr(resposta, "text", "") or "").strip()
+    if not conteudo:
+        raise ErroGemini("Gemini retornou uma resposta vazia.")
+
+    return conteudo
+
+
+def gerar_resposta_hibrida(
+    provedor: str,
+    documentos: list[Any],
+    pergunta: str,
+    modelo: str,
+    ollama_url: str = "http://localhost:11434",
+    timeout_s: int = 60,
+    prompt_sistema_arquivo: str = PROMPT_PADRAO_HABITACIONAL,
+) -> str:
+    """Direciona a geração de resposta para Ollama, OpenAI ou Gemini."""
+
+    provedor_normalizado = provedor.strip().lower()
+
+    if provedor_normalizado in {"local", "ollama"}:
+        return responder_com_ollama(
+            documentos=documentos,
+            pergunta=pergunta,
+            modelo=modelo,
+            base_url=ollama_url,
+            timeout_s=timeout_s,
+            prompt_sistema_arquivo=prompt_sistema_arquivo,
+        )
+
+    if provedor_normalizado == "openai":
+        return responder_com_openai(
+            documentos=documentos,
+            pergunta=pergunta,
+            modelo=modelo,
+            timeout_s=timeout_s,
+            prompt_sistema_arquivo=prompt_sistema_arquivo,
+        )
+
+    if provedor_normalizado == "gemini":
+        return responder_com_gemini(
+            documentos=documentos,
+            pergunta=pergunta,
+            modelo=modelo,
+            timeout_s=timeout_s,
+            prompt_sistema_arquivo=prompt_sistema_arquivo,
+        )
+
+    raise ValueError("Provedor inválido. Use: ollama/local, openai ou gemini.")
 
 
 def parsear_argumentos() -> argparse.Namespace:
