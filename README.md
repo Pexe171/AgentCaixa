@@ -36,6 +36,17 @@ Este projeto implementa um pipeline completo de perguntas e respostas sobre docu
 
 ---
 
+
+### Configuração de ambiente (.env)
+
+Para habilitar modo cloud com OpenAI, crie um arquivo `.env` na raiz do projeto:
+
+```bash
+OPENAI_API_KEY=sua_chave_aqui
+```
+
+> O sistema carrega automaticamente o `.env` ao usar OpenAI no `agent.py` e no `query_rewriter.py`.
+
 ## Pré-requisitos
 
 - Python **3.10+**
@@ -59,7 +70,7 @@ ollama pull llama3
 No diretório do projeto:
 
 ```bash
-pip install python-docx chromadb rank-bm25 requests streamlit pandas ollama
+pip install python-docx chromadb rank-bm25 requests streamlit pandas ollama openai python-dotenv
 ```
 
 ---
@@ -101,10 +112,18 @@ Depois, abra no navegador o endereço mostrado pelo Streamlit (normalmente `http
 Crie um arquivo `perguntas.txt` com uma pergunta por linha e execute:
 
 ```bash
-python avaliador_em_lote.py
+python avaliador_em_lote.py --provedor local
 ```
 
-Saída padrão: `relatorio_avaliacao.csv`.
+Saída padrão local: `relatorio_avaliacao.csv`.
+
+#### Modo Turbo (OpenAI com paralelismo)
+
+```bash
+python avaliador_em_lote.py --provedor openai --threads 50 --modelo-llm gpt-4o-mini
+```
+
+Saída padrão OpenAI: `relatorio_ouro_openai.csv`.
 
 
 ### 6) Auditar manualmente o relatório no Streamlit
@@ -137,10 +156,12 @@ python agent.py --pergunta "Minha pergunta" --prompt-sistema especialista_renda.
 ## Como usar o chat
 
 1. Abra o app com `streamlit run app.py`.
-2. Na **sidebar**, ajuste configurações como diretório do Chroma, coleção e modelos do Ollama.
-3. O campo **Top-K de contexto** inicia em `4` por padrão (para reduzir latência); diminua para `3` se quiser ainda mais velocidade.
-4. Digite sua pergunta no campo de chat. Antes da busca, o sistema aplica automaticamente Query Rewriting para transformar a pergunta em termos técnicos e melhorar a recuperação de contexto.
-5. Após cada resposta, clique em:
+2. Na **sidebar**, ajuste configurações como diretório do Chroma, coleção e modelos.
+3. Selecione o **Provedor de inferência** em `Local (Ollama)` (padrão) ou `Cloud (OpenAI)`.
+4. Quando `Cloud (OpenAI)` estiver ativo, o app exibirá o aviso **Custo por token ativo**.
+5. O campo **Top-K de contexto** inicia em `4` por padrão (para reduzir latência); diminua para `3` se quiser ainda mais velocidade.
+6. Digite sua pergunta no campo de chat. Antes da busca, o sistema aplica automaticamente Query Rewriting com o mesmo provedor selecionado (local/cloud), melhorando a recuperação de contexto.
+7. Após cada resposta, clique em:
    - **👍 Correto** quando a resposta estiver adequada.
    - **👎 Impreciso** quando estiver incorreta ou incompleta.
 6. A sidebar atualiza o **Gráfico de Aprendizado** com a taxa de acerto (%) por data.
